@@ -1,0 +1,9 @@
+server:
+  port: 5199
+
+llm:
+  provider: deepseek
+  deepseek:
+    api-key: sk-2d454c8229694007803466504b0ca8d8
+    base-url: https://api.deepseek.com
+    model: deepseek-chat
