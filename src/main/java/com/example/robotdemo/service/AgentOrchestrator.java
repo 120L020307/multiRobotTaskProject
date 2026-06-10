@@ -21,15 +21,17 @@ public class AgentOrchestrator {
     private final ContractMatchingService contractMatchingService;
     private final Ros2CodegenService ros2CodegenService;
     private final RecoveryService recoveryService;
+    private final CapabilityNormalizer capabilityNormalizer;
     private final ObjectMapper mapper;
 
-    public AgentOrchestrator(DeepSeekClient llm, DataLoader dataLoader, ValidationService validationService, ContractMatchingService contractMatchingService, Ros2CodegenService ros2CodegenService, RecoveryService recoveryService, ObjectMapper mapper) {
+    public AgentOrchestrator(DeepSeekClient llm, DataLoader dataLoader, ValidationService validationService, ContractMatchingService contractMatchingService, Ros2CodegenService ros2CodegenService, RecoveryService recoveryService, CapabilityNormalizer capabilityNormalizer, ObjectMapper mapper) {
         this.llm = llm;
         this.dataLoader = dataLoader;
         this.validationService = validationService;
         this.contractMatchingService = contractMatchingService;
         this.ros2CodegenService = ros2CodegenService;
         this.recoveryService = recoveryService;
+        this.capabilityNormalizer = capabilityNormalizer;
         this.mapper = mapper;
     }
 
@@ -54,18 +56,19 @@ public class AgentOrchestrator {
         TaskIntent intent = mapper.convertValue(intentResult.data(), TaskIntent.class);
         runLogger.output("TaskIntentAgent", "输出 TaskIntent", intent);
 
-        String graphInput = "原文：\n" + text + "\n\nTaskIntent：\n" + json(intent);
+        String capabilityHint = capabilityNormalizer.capabilityHint(contracts);
+        String graphInput = "原文：\n" + text + "\n\nTaskIntent：\n" + json(intent) + "\n\n可用标准能力：\n" + capabilityHint;
         runLogger.input("TaskGraphAgent", "输入原文与 TaskIntent，生成初始任务图", Map.of("prompt", graphInput, "schema", graphSchemaHint()));
         AgentResult graphResult = llm.callJsonAgent("TaskGraphAgent", graphPrompt(), graphInput, graphSchemaHint());
         traces.add(graphResult.trace());
-        TaskGraph graph = GraphSupport.mapToGraph(graphResult.data(), text);
+        TaskGraph graph = capabilityNormalizer.normalize(GraphSupport.mapToGraph(graphResult.data(), text), contracts);
         runLogger.output("TaskGraphAgent", "输出 DraftTaskGraph", graphSummary(graph));
 
         String evidenceInput = "原文：\n" + text + "\n\nTaskGraph：\n" + json(graph);
         runLogger.input("EvidenceBindingAgent", "输入初始任务图，校正 evidence_span", Map.of("prompt", evidenceInput, "schema", graphSchemaHint()));
         AgentResult evidenceResult = llm.callJsonAgent("EvidenceBindingAgent", evidencePrompt(), evidenceInput, graphSchemaHint());
         traces.add(evidenceResult.trace());
-        graph = GraphSupport.mapToGraph(evidenceResult.data(), text);
+        graph = capabilityNormalizer.normalize(GraphSupport.mapToGraph(evidenceResult.data(), text), contracts);
         runLogger.output("EvidenceBindingAgent", "输出 EvidenceTaskGraph", graphSummary(graph));
 
         runLogger.input("ValidationTool", "输入 EvidenceTaskGraph 与能力契约库，执行确定性校验", Map.of("graph", graphSummary(graph), "contracts", contractSummary(contracts)));
@@ -78,7 +81,7 @@ public class AgentOrchestrator {
             runLogger.input("ValidationRepairAgent", "输入校验错误，按 repair_scope 局部修复任务图", Map.of("prompt", repairInput, "schema", graphSchemaHint()));
             AgentResult repairResult = llm.callJsonAgent("ValidationRepairAgent", repairPrompt(), repairInput, graphSchemaHint());
             traces.add(repairResult.trace());
-            graph = GraphSupport.mapToGraph(repairResult.data(), text);
+            graph = capabilityNormalizer.normalize(GraphSupport.mapToGraph(repairResult.data(), text), contracts);
             runLogger.output("ValidationRepairAgent", "输出 RevisedTaskGraph", graphSummary(graph));
             runLogger.input("ValidationTool", "对修复后的任务图再次校验", graphSummary(graph));
             validation = validationService.validate(graph, contracts);
@@ -163,7 +166,7 @@ public class AgentOrchestrator {
     }
 
     private String intentPrompt() { return "你是异构多机器人任务理解 Agent。只负责从自然语言中抽取任务目标、机器人类型、对象、区域和条件/异常触发词。不要生成任务图，不要分配机器人。"; }
-    private String graphPrompt() { return "你是证据约束任务图生成 Agent。根据 TaskIntent 和原文生成 TaskGraph。节点只表示 UAV/UGV/DOG 的可执行机器人任务；发现异常、异常检测、电量检测等系统判定不要生成 SYSTEM 节点，应表达为 condition/recovery 边；边表达 sequence/parallel/condition/recovery；evidence 必须填写原文连续短语；无法确定的参数写入 missing_fields；不要做具体机器人实例分配。"; }
+    private String graphPrompt() { return "你是证据约束任务图生成 Agent。根据 TaskIntent、原文和可用标准能力生成 TaskGraph。节点只表示 UAV/UGV/DOG 的可执行机器人任务；task_type 必须优先从可用标准能力中选择，不要输出 enter/retreat/approach/detect 等开放式动词；发现异常、异常检测、电量检测等系统判定不要生成 SYSTEM 节点，应表达为 condition/recovery 边；边表达 sequence/parallel/condition/recovery；evidence 必须填写原文连续短语；无法确定的参数写入 missing_fields；不要做具体机器人实例分配。"; }
     private String evidencePrompt() { return "你是证据绑定 Agent。检查每个节点、边、约束的 evidence 是否为原文连续片段；如不是，请替换为最接近的原文连续短语。不得改动任务语义。"; }
     private String repairPrompt() { return "你是校验修复 Agent。只能根据 ValidationReport 修复 repair_scope 内的问题，不要整体重写任务图。修复后仍需保持 evidence 为原文连续片段。"; }
     private String recoveryPrompt() { return "你是异常恢复 Agent。根据任务图、当前计划和异常事件，给出局部恢复策略说明。你不直接改接口参数，具体重绑定由后端工具完成。"; }

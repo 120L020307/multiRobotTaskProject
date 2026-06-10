@@ -8,6 +8,12 @@ import java.util.stream.Collectors;
 
 @Service
 public class ValidationService {
+    private final CapabilityNormalizer capabilityNormalizer;
+
+    public ValidationService(CapabilityNormalizer capabilityNormalizer) {
+        this.capabilityNormalizer = capabilityNormalizer;
+    }
+
     public ValidationReport validate(TaskGraph graph, List<RobotContract> contracts) {
         List<ValidationIssue> errors = new ArrayList<>();
         List<ValidationIssue> warnings = new ArrayList<>();
@@ -18,8 +24,15 @@ public class ValidationService {
             if (node.actor_type() == null || node.actor_type().isBlank()) errors.add(issue("missing_field", node.id(), null, "actor_type", "error", "节点缺少 actor_type"));
             if (node.evidence() == null || node.evidence().start() < 0) warnings.add(issue("missing_evidence", node.id(), null, null, "warning", "节点缺少可定位原文证据"));
             if (node.missing_fields() != null && !node.missing_fields().isEmpty()) errors.add(issue("missing_param", node.id(), null, String.join(",", node.missing_fields()), "error", "任务参数不完整"));
-            if (!"SYSTEM".equals(node.actor_type()) && findCandidates(node, contracts, false).isEmpty()) {
-                errors.add(issue("capability_or_contract_missing", node.id(), null, null, "error", "没有找到满足 " + node.task_type() + "/" + node.actor_type() + " 的能力契约"));
+            if (!"SYSTEM".equals(node.actor_type())) {
+                List<Candidate> looseCandidates = findCandidates(node, contracts, false);
+                if (looseCandidates.isEmpty()) {
+                    List<Map<String, Object>> candidates = capabilityNormalizer.candidates(node, contracts, 3);
+                    String suffix = candidates.isEmpty() ? "" : "；候选能力：" + candidates.stream().map(c -> c.get("capability_name") + "(" + c.get("score") + ")").collect(Collectors.joining("、"));
+                    errors.add(issue("capability_or_contract_missing", node.id(), null, null, "error", "没有找到满足 " + node.task_type() + "/" + node.actor_type() + " 的能力契约" + suffix));
+                } else if (looseCandidates.stream().noneMatch(Candidate::feasible)) {
+                    warnings.add(issue("contract_precondition_not_met", node.id(), null, null, "warning", "存在能力契约，但当前状态、可达区域或参数未完全满足前置条件"));
+                }
             }
         }
         for (TaskEdge edge : graph.edges()) {

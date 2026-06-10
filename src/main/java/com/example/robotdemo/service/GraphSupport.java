@@ -109,6 +109,12 @@ public final class GraphSupport {
                 missing.remove("area");
                 missing.remove("source");
             }
+            if ("enter_narrow_area".equals(taskType)) {
+                params.putIfAbsent("area", inferArea(folded.raw_text(), params, "狭窄通道"));
+                params.putIfAbsent("mission", "recheck");
+                missing.remove("area");
+                missing.remove("mission");
+            }
             if ("transport_object".equals(taskType) || "deliver_small_item".equals(taskType)) {
                 params.putIfAbsent("object", inferObject(folded.raw_text(), params, "物资"));
                 params.putIfAbsent("target", params.getOrDefault("area", inferArea(folded.raw_text(), params, "异常点周边")));
@@ -196,6 +202,7 @@ public final class GraphSupport {
         input.forEach((key, value) -> params.put(normalizeParamKey(key), value));
         if ("inspect_area".equals(taskType)) params.putIfAbsent("area", inferArea(rawText, params, null));
         if ("recheck_area".equals(taskType)) params.putIfAbsent("area", inferArea(rawText, params, "异常点周边"));
+        if ("enter_narrow_area".equals(taskType)) params.putIfAbsent("area", inferArea(rawText, params, "狭窄通道"));
         if ("transport_object".equals(taskType) || "deliver_small_item".equals(taskType)) params.putIfAbsent("object", inferObject(rawText, params, null));
         return params;
     }
@@ -215,7 +222,7 @@ public final class GraphSupport {
             String text = str(value);
             if (text.endsWith("区") || text.contains("异常点周边") || text.contains("工具间")) return text;
         }
-        for (String candidate : List.of("异常点周边", "工具间", "A区", "B区")) if (rawText.contains(candidate)) return candidate;
+        for (String candidate : List.of("异常点周边", "狭窄通道", "楼梯间", "地下通道", "管廊", "工具间", "A区", "B区", "C区", "D区", "E区")) if (rawText.contains(candidate)) return candidate;
         return fallback;
     }
 
@@ -257,7 +264,8 @@ public final class GraphSupport {
         if (lower.contains("recheck") || lower.contains("review") || value.contains("复查") || value.contains("复检") || value.contains("核查")) return "recheck_area";
         if ("DOG".equals(actorType) && (lower.contains("patrol") || value.contains("巡逻") || value.contains("值守"))) return "patrol_area";
         if ("DOG".equals(actorType) && (value.contains("搜索") || value.contains("搜寻") || value.contains("人员") || lower.contains("search"))) return "search_person";
-        if ("DOG".equals(actorType) && (value.contains("狭窄") || value.contains("楼梯") || value.contains("管廊") || value.contains("地下通道") || lower.contains("narrow"))) return "enter_narrow_area";
+        if ("DOG".equals(actorType) && (lower.equals("enter") || lower.contains("enter") || value.contains("进入") || value.contains("狭窄") || value.contains("楼梯") || value.contains("管廊") || value.contains("地下通道") || lower.contains("narrow"))) return "enter_narrow_area";
+        if ("DOG".equals(actorType) && (lower.equals("retreat") || lower.contains("retreat") || value.contains("撤退") || value.contains("回退") || value.contains("退出"))) return "recheck_area";
         if (lower.contains("inspect") || lower.contains("patrol") || value.contains("巡检") || value.contains("巡视") || value.contains("检查")) return "inspect_area";
         if (lower.contains("pick") || lower.contains("grasp") || value.contains("抓取") || value.contains("拿取") || value.contains("拾取")) return "deliver_small_item";
         if (lower.contains("place") || value.contains("放置") || value.contains("放下")) return "deliver_small_item";

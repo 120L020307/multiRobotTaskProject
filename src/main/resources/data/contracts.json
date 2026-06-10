@@ -46,6 +46,21 @@
           "low_battery",
           "action_timeout",
           "gps_lost"
+        ],
+        "description": "区域巡检与图像采集",
+        "aliases": [
+          "inspect_area",
+          "inspect",
+          "survey",
+          "observe",
+          "scan",
+          "patrol",
+          "巡检",
+          "巡视",
+          "检查",
+          "拍摄",
+          "图像采集",
+          "航拍"
         ]
       },
       {
@@ -70,6 +85,16 @@
           "target_lost",
           "low_battery",
           "action_timeout"
+        ],
+        "description": "目标跟踪",
+        "aliases": [
+          "track_target",
+          "track",
+          "follow",
+          "跟踪",
+          "追踪",
+          "持续观察",
+          "移动目标"
         ]
       },
       {
@@ -93,6 +118,17 @@
         "failure_events": [
           "signal_lost",
           "low_battery"
+        ],
+        "description": "通信中继保障",
+        "aliases": [
+          "relay_communication",
+          "relay",
+          "communication",
+          "link",
+          "中继",
+          "通信中继",
+          "保持通信",
+          "信号增强"
         ]
       }
     ]
@@ -144,6 +180,21 @@
           "low_battery",
           "action_timeout",
           "bad_weather"
+        ],
+        "description": "区域巡检与图像采集",
+        "aliases": [
+          "inspect_area",
+          "inspect",
+          "survey",
+          "observe",
+          "scan",
+          "patrol",
+          "巡检",
+          "巡视",
+          "检查",
+          "拍摄",
+          "图像采集",
+          "航拍"
         ]
       },
       {
@@ -168,6 +219,15 @@
           "low_battery",
           "gps_lost",
           "action_timeout"
+        ],
+        "description": "区域建图",
+        "aliases": [
+          "map_area",
+          "map",
+          "mapping",
+          "建图",
+          "地图更新",
+          "测绘"
         ]
       },
       {
@@ -191,6 +251,17 @@
         "failure_events": [
           "signal_lost",
           "low_battery"
+        ],
+        "description": "通信中继保障",
+        "aliases": [
+          "relay_communication",
+          "relay",
+          "communication",
+          "link",
+          "中继",
+          "通信中继",
+          "保持通信",
+          "信号增强"
         ]
       }
     ]
@@ -242,6 +313,17 @@
           "low_battery",
           "blocked",
           "localization_lost"
+        ],
+        "description": "导航到目标位置",
+        "aliases": [
+          "navigate",
+          "go",
+          "move",
+          "approach",
+          "前往",
+          "移动",
+          "到达",
+          "接近"
         ]
       },
       {
@@ -266,6 +348,25 @@
           "low_battery",
           "interface_failed",
           "blocked"
+        ],
+        "description": "异常区域复查确认",
+        "aliases": [
+          "recheck_area",
+          "recheck",
+          "review",
+          "verify",
+          "confirm",
+          "retreat",
+          "fallback",
+          "复查",
+          "复核",
+          "核查",
+          "确认",
+          "近距离确认",
+          "回退",
+          "撤退",
+          "退出",
+          "接替复查"
         ]
       },
       {
@@ -289,6 +390,18 @@
           "low_battery",
           "blocked",
           "payload_overweight"
+        ],
+        "description": "地面物资运输",
+        "aliases": [
+          "transport_object",
+          "transport",
+          "carry",
+          "deliver",
+          "搬运",
+          "运输",
+          "运送",
+          "携带",
+          "拖运"
         ]
       },
       {
@@ -313,6 +426,16 @@
           "low_battery",
           "obstacle_too_large",
           "interface_failed"
+        ],
+        "description": "障碍物清理",
+        "aliases": [
+          "clear_obstacle",
+          "clear",
+          "remove obstacle",
+          "清障",
+          "清除障碍",
+          "处理障碍",
+          "道路阻塞"
         ]
       }
     ]
@@ -364,6 +487,17 @@
           "low_battery",
           "blocked",
           "localization_lost"
+        ],
+        "description": "导航到目标位置",
+        "aliases": [
+          "navigate",
+          "go",
+          "move",
+          "approach",
+          "前往",
+          "移动",
+          "到达",
+          "接近"
         ]
       },
       {
@@ -388,6 +522,25 @@
           "low_battery",
           "interface_failed",
           "blocked"
+        ],
+        "description": "异常区域复查确认",
+        "aliases": [
+          "recheck_area",
+          "recheck",
+          "review",
+          "verify",
+          "confirm",
+          "retreat",
+          "fallback",
+          "复查",
+          "复核",
+          "核查",
+          "确认",
+          "近距离确认",
+          "回退",
+          "撤退",
+          "退出",
+          "接替复查"
         ]
       },
       {
@@ -411,6 +564,18 @@
           "low_battery",
           "blocked",
           "payload_overweight"
+        ],
+        "description": "地面物资运输",
+        "aliases": [
+          "transport_object",
+          "transport",
+          "carry",
+          "deliver",
+          "搬运",
+          "运输",
+          "运送",
+          "携带",
+          "拖运"
         ]
       },
       {
@@ -434,6 +599,16 @@
           "low_battery",
           "blocked",
           "tow_failed"
+        ],
+        "description": "故障机器人拖回",
+        "aliases": [
+          "tow_robot",
+          "tow",
+          "rescue robot",
+          "拖回",
+          "牵引",
+          "拖走",
+          "救援机器人"
         ]
       }
     ]
@@ -485,6 +660,15 @@
           "low_battery",
           "slip_detected",
           "action_timeout"
+        ],
+        "description": "地面/四足巡逻",
+        "aliases": [
+          "patrol_area",
+          "patrol",
+          "guard patrol",
+          "巡逻",
+          "巡查",
+          "值守巡逻"
         ]
       },
       {
@@ -509,6 +693,25 @@
           "low_battery",
           "interface_failed",
           "slip_detected"
+        ],
+        "description": "异常区域复查确认",
+        "aliases": [
+          "recheck_area",
+          "recheck",
+          "review",
+          "verify",
+          "confirm",
+          "retreat",
+          "fallback",
+          "复查",
+          "复核",
+          "核查",
+          "确认",
+          "近距离确认",
+          "回退",
+          "撤退",
+          "退出",
+          "接替复查"
         ]
       },
       {
@@ -533,6 +736,20 @@
           "low_battery",
           "blocked",
           "sensor_occluded"
+        ],
+        "description": "进入狭窄或复杂空间",
+        "aliases": [
+          "enter_narrow_area",
+          "enter",
+          "go into",
+          "进入",
+          "进入通道",
+          "狭窄通道",
+          "楼梯间",
+          "管廊",
+          "地下通道",
+          "narrow",
+          "confined space"
         ]
       },
       {
@@ -556,6 +773,19 @@
           "low_battery",
           "blocked",
           "payload_dropped"
+        ],
+        "description": "小件物资递送",
+        "aliases": [
+          "deliver_small_item",
+          "deliver",
+          "hand over",
+          "drop off",
+          "递送",
+          "配送",
+          "送达",
+          "急救包",
+          "小件",
+          "工具箱"
         ]
       }
     ]
@@ -607,6 +837,15 @@
           "low_battery",
           "slip_detected",
           "action_timeout"
+        ],
+        "description": "地面/四足巡逻",
+        "aliases": [
+          "patrol_area",
+          "patrol",
+          "guard patrol",
+          "巡逻",
+          "巡查",
+          "值守巡逻"
         ]
       },
       {
@@ -631,6 +870,16 @@
           "low_battery",
           "target_not_found",
           "sensor_occluded"
+        ],
+        "description": "人员搜索",
+        "aliases": [
+          "search_person",
+          "search",
+          "find person",
+          "搜寻",
+          "搜索",
+          "寻找人员",
+          "人员定位"
         ]
       },
       {
@@ -655,6 +904,20 @@
           "low_battery",
           "blocked",
           "sensor_occluded"
+        ],
+        "description": "进入狭窄或复杂空间",
+        "aliases": [
+          "enter_narrow_area",
+          "enter",
+          "go into",
+          "进入",
+          "进入通道",
+          "狭窄通道",
+          "楼梯间",
+          "管廊",
+          "地下通道",
+          "narrow",
+          "confined space"
         ]
       },
       {
@@ -679,6 +942,16 @@
           "low_battery",
           "intrusion_detected",
           "action_timeout"
+        ],
+        "description": "区域值守",
+        "aliases": [
+          "guard_area",
+          "guard",
+          "watch",
+          "值守",
+          "警戒",
+          "看守",
+          "布防"
         ]
       }
     ]

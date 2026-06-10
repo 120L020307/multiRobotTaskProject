@@ -83,6 +83,8 @@ public final class Models {
 
     public record Contract(
             String capability_name,
+            String description,
+            List<String> aliases,
             RosInterface ros_interface,
             Map<String, String> input_mapping,
             Map<String, String> output_mapping,
