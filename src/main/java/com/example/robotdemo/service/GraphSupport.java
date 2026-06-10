@@ -67,37 +67,119 @@ public final class GraphSupport {
     }
 
     public static TaskGraph contractNormalize(TaskGraph graph) {
-        Map<String, String> incoming = new HashMap<>();
-        for (TaskEdge edge : graph.edges()) {
-            if (!"recovery".equals(edge.type()) && !incoming.containsKey(edge.target())) incoming.put(edge.target(), edge.source());
-        }
-        List<TaskNode> nodes = graph.nodes().stream().map(node -> {
+        List<TaskNode> normalizedNodes = graph.nodes().stream().map(node -> {
             String actorType = normalizeActorType(node.actor_type());
             String taskType = normalizeTaskType(node.task_type(), actorType);
             Map<String, Object> params = normalizeParams(new LinkedHashMap<>(node.params() == null ? Map.of() : node.params()), taskType, graph.raw_text());
             Set<String> missing = new LinkedHashSet<>(node.missing_fields() == null ? List.of() : node.missing_fields());
+            return new TaskNode(node.id(), taskType, actorType, params, node.output(), node.status(), node.confidence(), new ArrayList<>(missing), node.evidence());
+        }).collect(Collectors.toList());
+        TaskGraph folded = foldSystemDetectionNodes(new TaskGraph(normalizedNodes, graph.edges(), graph.constraints(), graph.raw_text(), null));
+        Map<String, String> incoming = new HashMap<>();
+        for (TaskEdge edge : folded.edges()) {
+            if (!incoming.containsKey(edge.target()) || "condition".equals(edge.type()) || "sequence".equals(edge.type())) incoming.put(edge.target(), edge.source());
+        }
+        List<TaskNode> nodes = folded.nodes().stream().map(node -> {
+            String actorType = node.actor_type();
+            String taskType = node.task_type();
+            Map<String, Object> params = new LinkedHashMap<>(node.params() == null ? Map.of() : node.params());
+            Set<String> missing = new LinkedHashSet<>(node.missing_fields() == null ? List.of() : node.missing_fields());
             if ("inspect_area".equals(taskType)) {
-                params.putIfAbsent("area", inferArea(graph.raw_text(), params, "A区"));
+                params.putIfAbsent("area", inferArea(folded.raw_text(), params, "A区"));
                 params.putIfAbsent("mode", "visual_thermal");
                 missing.remove("area");
                 missing.remove("mode");
             }
             if ("recheck_area".equals(taskType)) {
-                params.putIfAbsent("source", incoming.getOrDefault(node.id(), "anomaly_detection_output"));
-                params.putIfAbsent("area", "${" + incoming.getOrDefault(node.id(), "T1") + ".anomaly_location}");
+                String sourceNode = incoming.getOrDefault(node.id(), "anomaly_detection_output");
+                params.putIfAbsent("source", sourceNode);
+                if (!params.containsKey("area") || isGenericAnomalyArea(params.get("area"))) {
+                    params.put("area", "${" + sourceNode + ".anomaly_location}");
+                }
                 missing.remove("area");
                 missing.remove("source");
             }
             if ("pick_object".equals(taskType)) {
                 if (!params.containsKey("area") && params.containsKey("source")) params.put("area", params.get("source"));
                 params.putIfAbsent("area", "工具间");
-                params.putIfAbsent("object", inferObject(graph.raw_text(), params, "工具箱"));
+                params.putIfAbsent("object", inferObject(folded.raw_text(), params, "工具箱"));
                 missing.remove("area");
                 missing.remove("object");
             }
             return new TaskNode(node.id(), taskType, actorType, params, node.output(), node.status(), node.confidence(), new ArrayList<>(missing), node.evidence());
         }).collect(Collectors.toList());
-        return withCoverage(new TaskGraph(nodes, graph.edges(), graph.constraints(), graph.raw_text(), null));
+        return withCoverage(new TaskGraph(nodes, folded.edges(), folded.constraints(), folded.raw_text(), null));
+    }
+
+    private static TaskGraph foldSystemDetectionNodes(TaskGraph graph) {
+        Map<String, TaskNode> byId = graph.nodes().stream().collect(Collectors.toMap(TaskNode::id, node -> node, (a, b) -> a, LinkedHashMap::new));
+        Set<String> foldedIds = graph.nodes().stream()
+                .filter(GraphSupport::isSystemDetectionNode)
+                .map(TaskNode::id)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (foldedIds.isEmpty()) return graph;
+
+        List<TaskNode> nodes = graph.nodes().stream().filter(node -> !foldedIds.contains(node.id())).collect(Collectors.toList());
+        Map<String, List<TaskEdge>> incoming = new LinkedHashMap<>();
+        Map<String, List<TaskEdge>> outgoing = new LinkedHashMap<>();
+        for (TaskEdge edge : graph.edges()) {
+            if (foldedIds.contains(edge.target())) incoming.computeIfAbsent(edge.target(), k -> new ArrayList<>()).add(edge);
+            if (foldedIds.contains(edge.source())) outgoing.computeIfAbsent(edge.source(), k -> new ArrayList<>()).add(edge);
+        }
+
+        List<TaskEdge> edges = graph.edges().stream()
+                .filter(edge -> !foldedIds.contains(edge.source()) && !foldedIds.contains(edge.target()))
+                .collect(Collectors.toCollection(ArrayList::new));
+        Set<String> edgeKeys = edges.stream().map(edge -> edge.source() + "->" + edge.target() + ":" + edge.type()).collect(Collectors.toCollection(LinkedHashSet::new));
+        int generated = 1;
+        for (String systemId : foldedIds) {
+            TaskNode systemNode = byId.get(systemId);
+            List<TaskEdge> ins = incoming.getOrDefault(systemId, List.of());
+            List<TaskEdge> outs = outgoing.getOrDefault(systemId, List.of());
+            for (TaskEdge in : ins) {
+                for (TaskEdge out : outs) {
+                    if (foldedIds.contains(in.source()) || foldedIds.contains(out.target()) || Objects.equals(in.source(), out.target())) continue;
+                    String edgeType = foldedEdgeType(systemNode);
+                    String key = in.source() + "->" + out.target() + ":" + edgeType;
+                    if (!edgeKeys.add(key)) continue;
+                    edges.add(new TaskEdge(
+                            "E_SYS_" + generated++,
+                            in.source(),
+                            out.target(),
+                            edgeType,
+                            foldedCondition(systemNode, out.condition(), in.condition()),
+                            bestEvidence(systemNode.evidence(), out.evidence(), in.evidence())
+                    ));
+                }
+            }
+        }
+        return new TaskGraph(nodes, edges, graph.constraints(), graph.raw_text(), null);
+    }
+
+    private static boolean isSystemDetectionNode(TaskNode node) {
+        if (!"SYSTEM".equals(node.actor_type())) return false;
+        String text = (str(node.task_type()) + " " + evidenceText(node.evidence()) + " " + str(node.params())).toLowerCase(Locale.ROOT);
+        return text.contains("异常") || text.contains("电量") || text.contains("检测") || text.contains("判定")
+                || text.contains("anomaly") || text.contains("battery") || text.contains("detect") || text.contains("check");
+    }
+
+    private static String foldedEdgeType(TaskNode systemNode) {
+        String text = (str(systemNode.task_type()) + " " + evidenceText(systemNode.evidence()) + " " + str(systemNode.params())).toLowerCase(Locale.ROOT);
+        if (text.contains("电量") || text.contains("battery") || text.contains("low_battery")) return "recovery";
+        return "condition";
+    }
+
+    private static String foldedCondition(TaskNode systemNode, String primary, String fallback) {
+        String text = (str(systemNode.task_type()) + " " + evidenceText(systemNode.evidence()) + " " + str(systemNode.params())).toLowerCase(Locale.ROOT);
+        if (text.contains("电量") || text.contains("battery") || text.contains("low_battery")) return "low_battery";
+        if (text.contains("异常") || text.contains("anomaly")) return "anomaly_detected == true";
+        String condition = str(primary).isBlank() ? str(fallback) : str(primary);
+        return condition.isBlank() ? "system_condition == true" : condition;
+    }
+
+    private static EvidenceSpan bestEvidence(EvidenceSpan... spans) {
+        for (EvidenceSpan span : spans) if (span != null && span.start() >= 0) return span;
+        return new EvidenceSpan("", -1, -1);
     }
 
     private static Map<String, Object> normalizeParams(Map<String, Object> input, String taskType, String rawText) {
@@ -154,7 +236,7 @@ public final class GraphSupport {
         String lower = value.toLowerCase(Locale.ROOT);
         if (value.contains("无人机") || lower.contains("uav") || lower.contains("drone")) return "UAV";
         if (value.contains("无人车") || value.contains("地面") || lower.contains("ugv") || lower.contains("vehicle")) return "UGV";
-        if (value.contains("机械臂") || value.contains("机械手") || lower.contains("arm") || lower.contains("manipulator")) return "ARM";
+        if (value.contains("无人狗") || value.contains("机器狗") || lower.contains("dog") || lower.contains("quadruped")) return "DOG";
         if (value.contains("系统") || lower.contains("system")) return "SYSTEM";
         return value;
     }
@@ -162,7 +244,10 @@ public final class GraphSupport {
     private static String normalizeTaskType(String taskType, String actorType) {
         String value = str(taskType).trim();
         String lower = value.toLowerCase(Locale.ROOT);
-        if (Set.of("inspect_area", "recheck_area", "pick_object", "place_object", "transport_object", "navigate").contains(lower)) return lower;
+        if (Set.of("inspect_area", "recheck_area", "pick_object", "place_object", "transport_object", "navigate", "patrol_area", "enter_narrow_area", "search_person", "guard_area", "deliver_small_item", "map_area", "track_target", "relay_communication", "clear_obstacle", "tow_robot").contains(lower)) return lower;
+        if ("DOG".equals(actorType) && (lower.contains("patrol") || value.contains("巡逻") || value.contains("值守"))) return "patrol_area";
+        if ("DOG".equals(actorType) && (value.contains("狭窄") || value.contains("楼梯") || value.contains("管廊") || value.contains("地下通道") || lower.contains("narrow"))) return "enter_narrow_area";
+        if ("DOG".equals(actorType) && (value.contains("搜索") || value.contains("搜寻") || value.contains("人员") || lower.contains("search"))) return "search_person";
         if (lower.contains("inspect") || lower.contains("patrol") || value.contains("巡检") || value.contains("巡视") || value.contains("检查")) return "inspect_area";
         if (lower.contains("recheck") || lower.contains("review") || value.contains("复查") || value.contains("复检") || value.contains("核查")) return "recheck_area";
         if (lower.contains("pick") || lower.contains("grasp") || value.contains("抓取") || value.contains("拿取") || value.contains("拾取")) return "pick_object";
@@ -176,11 +261,18 @@ public final class GraphSupport {
     private static String normalizeEdgeType(String type, EvidenceSpan evidence, Object condition) {
         String value = str(type).trim().toLowerCase(Locale.ROOT);
         String clue = (str(evidence == null ? null : evidence.text()) + " " + str(condition)).trim();
+        String lowerClue = clue.toLowerCase(Locale.ROOT);
+        if (clue.contains("低电量") || clue.contains("电量低") || clue.contains("电量不足") || clue.contains("阻塞") || clue.contains("失败") || clue.contains("超时")
+                || lowerClue.contains("low_battery") || lowerClue.contains("blocked") || lowerClue.contains("failed") || lowerClue.contains("timeout") || lowerClue.contains("recover")) return "recovery";
         if (clue.contains("同时") || clue.contains("并行") || clue.contains("与此同时") || clue.contains("同步")) return "parallel";
         if (clue.contains("如果") || clue.contains("若") || clue.contains("发现") || clue.contains("条件") || value.contains("condition")) return "condition";
-        if (clue.contains("恢复") || clue.contains("替换") || clue.contains("换另一台") || value.contains("recover")) return "recovery";
         if (Set.of("sequence", "parallel", "condition", "recovery").contains(value)) return value;
         return value.isBlank() ? "sequence" : value;
+    }
+
+    private static boolean isGenericAnomalyArea(Object value) {
+        String text = str(value).trim();
+        return text.isBlank() || text.equals("异常点周边") || text.equals("异常位置") || text.equals("异常点") || text.equals("异常区域");
     }
 
     private static EvidenceSpan inferNodeEvidence(String rawText, String taskType, String actorType, String originalTaskType, Map<String, Object> params) {
@@ -188,7 +280,7 @@ public final class GraphSupport {
         candidates.add(str(originalTaskType));
         if ("inspect_area".equals(taskType)) candidates.addAll(List.of("无人机先巡检A区", "巡检A区", "巡检"));
         if ("recheck_area".equals(taskType)) candidates.addAll(List.of("派无人车到异常点周边复查", "换另一台无人车继续复查", "异常点周边复查", "继续复查", "复查"));
-        if ("pick_object".equals(taskType)) candidates.addAll(List.of("机械臂从工具间抓取工具箱", "抓取工具箱", "工具箱", "抓取"));
+        if ("pick_object".equals(taskType)) candidates.addAll(List.of("抓取工具箱", "工具箱", "抓取"));
         if ("transport_object".equals(taskType)) candidates.addAll(List.of("运输", "搬运"));
         params.values().forEach(value -> candidates.add(str(value)));
         for (String candidate : candidates) {

@@ -3,6 +3,7 @@ package com.example.robotdemo.controller;
 import com.example.robotdemo.config.LlmProperties;
 import com.example.robotdemo.model.Models.PipelineRequest;
 import com.example.robotdemo.model.Models.PipelineResponse;
+import com.example.robotdemo.model.Models.RobotContract;
 import com.example.robotdemo.service.AgentOrchestrator;
 import com.example.robotdemo.service.DataLoader;
 import com.example.robotdemo.service.RunLogger;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -60,6 +62,27 @@ public class ApiController {
     @GetMapping("/contracts")
     public Object contracts() {
         return dataLoader.contracts();
+    }
+
+    @GetMapping("/contracts/config")
+    public Object contractConfig() {
+        return dataLoader.contractConfigInfo();
+    }
+
+    @PutMapping("/contracts")
+    public ResponseEntity<?> saveContracts(@RequestBody List<RobotContract> contracts) {
+        try {
+            if (contracts == null || contracts.isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "能力契约不能为空", "code", "empty_contracts"));
+            }
+            return ResponseEntity.ok(Map.of(
+                    "ok", true,
+                    "contracts", dataLoader.saveContracts(contracts),
+                    "config", dataLoader.contractConfigInfo()
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("error", e.getMessage(), "code", "contract_save_error"));
+        }
     }
 
     @PostMapping("/pipeline")

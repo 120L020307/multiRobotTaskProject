@@ -2,80 +2,684 @@
   {
     "robot_id": "UAV-01",
     "robot_type": "UAV",
-    "capabilities": ["inspect_area", "detect_anomaly"],
-    "state": { "online": true, "battery": 82, "status": "idle", "reachable_areas": ["A区", "B区", "异常点周边"] },
+    "capabilities": [
+      "inspect_area",
+      "detect_anomaly",
+      "track_target",
+      "relay_communication"
+    ],
+    "state": {
+      "online": true,
+      "battery": 82,
+      "status": "idle",
+      "reachable_areas": [
+        "A区",
+        "B区",
+        "C区",
+        "D区",
+        "仓库外场",
+        "园区主路",
+        "屋顶",
+        "异常点周边"
+      ]
+    },
     "contracts": [
       {
         "capability_name": "inspect_area",
-        "ros_interface": { "type": "Action", "name": "/uav_01/inspect_area" },
-        "input_mapping": { "area": "goal.area_id", "mode": "goal.inspect_mode" },
-        "output_mapping": { "anomaly_location": "result.anomaly.pose", "status": "result.status" },
-        "preconditions": { "battery_min": 30, "online": true },
-        "failure_events": ["low_battery", "action_timeout"]
+        "ros_interface": {
+          "type": "Action",
+          "name": "/uav_01/inspect_area"
+        },
+        "input_mapping": {
+          "area": "goal.area_id",
+          "mode": "goal.inspect_mode"
+        },
+        "output_mapping": {
+          "anomaly_location": "result.anomaly.pose",
+          "status": "result.status"
+        },
+        "preconditions": {
+          "battery_min": 30,
+          "online": true
+        },
+        "failure_events": [
+          "low_battery",
+          "action_timeout",
+          "gps_lost"
+        ]
+      },
+      {
+        "capability_name": "track_target",
+        "ros_interface": {
+          "type": "Action",
+          "name": "/uav_01/track_target"
+        },
+        "input_mapping": {
+          "target": "goal.target_id",
+          "area": "goal.area_id"
+        },
+        "output_mapping": {
+          "trajectory": "result.target_path",
+          "status": "result.status"
+        },
+        "preconditions": {
+          "battery_min": 35,
+          "online": true
+        },
+        "failure_events": [
+          "target_lost",
+          "low_battery",
+          "action_timeout"
+        ]
+      },
+      {
+        "capability_name": "relay_communication",
+        "ros_interface": {
+          "type": "Action",
+          "name": "/uav_01/relay_communication"
+        },
+        "input_mapping": {
+          "area": "goal.coverage_area",
+          "duration": "goal.duration_sec"
+        },
+        "output_mapping": {
+          "link_quality": "result.link_quality",
+          "status": "result.status"
+        },
+        "preconditions": {
+          "battery_min": 40,
+          "online": true
+        },
+        "failure_events": [
+          "signal_lost",
+          "low_battery"
+        ]
+      }
+    ]
+  },
+  {
+    "robot_id": "UAV-02",
+    "robot_type": "UAV",
+    "capabilities": [
+      "inspect_area",
+      "detect_anomaly",
+      "map_area",
+      "relay_communication"
+    ],
+    "state": {
+      "online": true,
+      "battery": 91,
+      "status": "idle",
+      "reachable_areas": [
+        "A区",
+        "B区",
+        "C区",
+        "D区",
+        "E区",
+        "河道",
+        "仓库外场",
+        "异常点周边"
+      ]
+    },
+    "contracts": [
+      {
+        "capability_name": "inspect_area",
+        "ros_interface": {
+          "type": "Action",
+          "name": "/uav_02/inspect_area"
+        },
+        "input_mapping": {
+          "area": "goal.area_id",
+          "mode": "goal.inspect_mode"
+        },
+        "output_mapping": {
+          "anomaly_location": "result.anomaly.pose",
+          "status": "result.status"
+        },
+        "preconditions": {
+          "battery_min": 30,
+          "online": true
+        },
+        "failure_events": [
+          "low_battery",
+          "action_timeout",
+          "bad_weather"
+        ]
+      },
+      {
+        "capability_name": "map_area",
+        "ros_interface": {
+          "type": "Action",
+          "name": "/uav_02/map_area"
+        },
+        "input_mapping": {
+          "area": "goal.area_id",
+          "resolution": "goal.map_resolution"
+        },
+        "output_mapping": {
+          "map": "result.occupancy_grid",
+          "status": "result.status"
+        },
+        "preconditions": {
+          "battery_min": 45,
+          "online": true
+        },
+        "failure_events": [
+          "low_battery",
+          "gps_lost",
+          "action_timeout"
+        ]
+      },
+      {
+        "capability_name": "relay_communication",
+        "ros_interface": {
+          "type": "Action",
+          "name": "/uav_02/relay_communication"
+        },
+        "input_mapping": {
+          "area": "goal.coverage_area",
+          "duration": "goal.duration_sec"
+        },
+        "output_mapping": {
+          "link_quality": "result.link_quality",
+          "status": "result.status"
+        },
+        "preconditions": {
+          "battery_min": 40,
+          "online": true
+        },
+        "failure_events": [
+          "signal_lost",
+          "low_battery"
+        ]
       }
     ]
   },
   {
     "robot_id": "UGV-01",
     "robot_type": "UGV",
-    "capabilities": ["navigate", "recheck_area", "transport_object"],
-    "state": { "online": true, "battery": 88, "status": "idle", "reachable_areas": ["A区", "B区", "异常点周边", "工具间"] },
+    "capabilities": [
+      "navigate",
+      "recheck_area",
+      "transport_object",
+      "clear_obstacle"
+    ],
+    "state": {
+      "online": true,
+      "battery": 88,
+      "status": "idle",
+      "reachable_areas": [
+        "A区",
+        "B区",
+        "C区",
+        "D区",
+        "异常点周边",
+        "补给点",
+        "工具间",
+        "仓库外场"
+      ]
+    },
     "contracts": [
       {
+        "capability_name": "navigate",
+        "ros_interface": {
+          "type": "Action",
+          "name": "/ugv_01/navigate"
+        },
+        "input_mapping": {
+          "target": "goal.target_pose",
+          "route_preference": "goal.route_preference"
+        },
+        "output_mapping": {
+          "arrival_time": "result.arrival_time",
+          "status": "result.status"
+        },
+        "preconditions": {
+          "battery_min": 20,
+          "online": true
+        },
+        "failure_events": [
+          "low_battery",
+          "blocked",
+          "localization_lost"
+        ]
+      },
+      {
         "capability_name": "recheck_area",
-        "ros_interface": { "type": "Action", "name": "/ugv_01/recheck_area" },
-        "input_mapping": { "area": "goal.target_area", "source": "goal.source_task" },
-        "output_mapping": { "report": "result.report", "status": "result.status" },
-        "preconditions": { "battery_min": 20, "online": true },
-        "failure_events": ["low_battery", "interface_failed"]
+        "ros_interface": {
+          "type": "Action",
+          "name": "/ugv_01/recheck_area"
+        },
+        "input_mapping": {
+          "area": "goal.target_area",
+          "source": "goal.source_task"
+        },
+        "output_mapping": {
+          "report": "result.report",
+          "status": "result.status"
+        },
+        "preconditions": {
+          "battery_min": 20,
+          "online": true
+        },
+        "failure_events": [
+          "low_battery",
+          "interface_failed",
+          "blocked"
+        ]
       },
       {
         "capability_name": "transport_object",
-        "ros_interface": { "type": "Action", "name": "/ugv_01/transport_object" },
-        "input_mapping": { "object": "goal.object_id", "target": "goal.target_area" },
-        "output_mapping": { "status": "result.status" },
-        "preconditions": { "battery_min": 25, "online": true },
-        "failure_events": ["low_battery", "blocked"]
+        "ros_interface": {
+          "type": "Action",
+          "name": "/ugv_01/transport_object"
+        },
+        "input_mapping": {
+          "object": "goal.object_id",
+          "target": "goal.target_area"
+        },
+        "output_mapping": {
+          "status": "result.status"
+        },
+        "preconditions": {
+          "battery_min": 25,
+          "online": true
+        },
+        "failure_events": [
+          "low_battery",
+          "blocked",
+          "payload_overweight"
+        ]
+      },
+      {
+        "capability_name": "clear_obstacle",
+        "ros_interface": {
+          "type": "Action",
+          "name": "/ugv_01/clear_obstacle"
+        },
+        "input_mapping": {
+          "area": "goal.target_area",
+          "obstacle": "goal.obstacle_type"
+        },
+        "output_mapping": {
+          "status": "result.status",
+          "clearance_report": "result.report"
+        },
+        "preconditions": {
+          "battery_min": 35,
+          "online": true
+        },
+        "failure_events": [
+          "low_battery",
+          "obstacle_too_large",
+          "interface_failed"
+        ]
       }
     ]
   },
   {
     "robot_id": "UGV-02",
     "robot_type": "UGV",
-    "capabilities": ["navigate", "recheck_area", "transport_object"],
-    "state": { "online": true, "battery": 76, "status": "idle", "reachable_areas": ["A区", "B区", "异常点周边", "工具间"] },
+    "capabilities": [
+      "navigate",
+      "recheck_area",
+      "transport_object",
+      "tow_robot"
+    ],
+    "state": {
+      "online": true,
+      "battery": 76,
+      "status": "idle",
+      "reachable_areas": [
+        "A区",
+        "B区",
+        "C区",
+        "E区",
+        "异常点周边",
+        "补给点",
+        "工具间",
+        "维修点"
+      ]
+    },
     "contracts": [
       {
+        "capability_name": "navigate",
+        "ros_interface": {
+          "type": "Action",
+          "name": "/ugv_02/navigate"
+        },
+        "input_mapping": {
+          "target": "goal.target_pose",
+          "route_preference": "goal.route_preference"
+        },
+        "output_mapping": {
+          "arrival_time": "result.arrival_time",
+          "status": "result.status"
+        },
+        "preconditions": {
+          "battery_min": 20,
+          "online": true
+        },
+        "failure_events": [
+          "low_battery",
+          "blocked",
+          "localization_lost"
+        ]
+      },
+      {
         "capability_name": "recheck_area",
-        "ros_interface": { "type": "Action", "name": "/ugv_02/recheck_area" },
-        "input_mapping": { "area": "goal.target_area", "source": "goal.source_task" },
-        "output_mapping": { "report": "result.report", "status": "result.status" },
-        "preconditions": { "battery_min": 20, "online": true },
-        "failure_events": ["low_battery", "interface_failed"]
+        "ros_interface": {
+          "type": "Action",
+          "name": "/ugv_02/recheck_area"
+        },
+        "input_mapping": {
+          "area": "goal.target_area",
+          "source": "goal.source_task"
+        },
+        "output_mapping": {
+          "report": "result.report",
+          "status": "result.status"
+        },
+        "preconditions": {
+          "battery_min": 20,
+          "online": true
+        },
+        "failure_events": [
+          "low_battery",
+          "interface_failed",
+          "blocked"
+        ]
       },
       {
         "capability_name": "transport_object",
-        "ros_interface": { "type": "Action", "name": "/ugv_02/transport_object" },
-        "input_mapping": { "object": "goal.object_id", "target": "goal.target_area" },
-        "output_mapping": { "status": "result.status" },
-        "preconditions": { "battery_min": 25, "online": true },
-        "failure_events": ["low_battery", "blocked"]
+        "ros_interface": {
+          "type": "Action",
+          "name": "/ugv_02/transport_object"
+        },
+        "input_mapping": {
+          "object": "goal.object_id",
+          "target": "goal.target_area"
+        },
+        "output_mapping": {
+          "status": "result.status"
+        },
+        "preconditions": {
+          "battery_min": 25,
+          "online": true
+        },
+        "failure_events": [
+          "low_battery",
+          "blocked",
+          "payload_overweight"
+        ]
+      },
+      {
+        "capability_name": "tow_robot",
+        "ros_interface": {
+          "type": "Action",
+          "name": "/ugv_02/tow_robot"
+        },
+        "input_mapping": {
+          "robot": "goal.disabled_robot_id",
+          "target": "goal.target_area"
+        },
+        "output_mapping": {
+          "status": "result.status"
+        },
+        "preconditions": {
+          "battery_min": 45,
+          "online": true
+        },
+        "failure_events": [
+          "low_battery",
+          "blocked",
+          "tow_failed"
+        ]
       }
     ]
   },
   {
-    "robot_id": "ARM-01",
-    "robot_type": "ARM",
-    "capabilities": ["pick_object", "place_object"],
-    "state": { "online": true, "battery": 100, "status": "idle", "reachable_areas": ["工具间"] },
+    "robot_id": "DOG-01",
+    "robot_type": "DOG",
+    "capabilities": [
+      "patrol_area",
+      "recheck_area",
+      "enter_narrow_area",
+      "deliver_small_item"
+    ],
+    "state": {
+      "online": true,
+      "battery": 84,
+      "status": "idle",
+      "reachable_areas": [
+        "A区",
+        "B区",
+        "C区",
+        "楼梯间",
+        "管廊",
+        "狭窄通道",
+        "异常点周边",
+        "门岗"
+      ]
+    },
     "contracts": [
       {
-        "capability_name": "pick_object",
-        "ros_interface": { "type": "Service", "name": "/arm_01/pick_object" },
-        "input_mapping": { "object": "request.object_id", "area": "request.source_area" },
-        "output_mapping": { "status": "response.status" },
-        "preconditions": { "battery_min": 0, "online": true },
-        "failure_events": ["object_not_found", "service_failed"]
+        "capability_name": "patrol_area",
+        "ros_interface": {
+          "type": "Action",
+          "name": "/dog_01/patrol_area"
+        },
+        "input_mapping": {
+          "area": "goal.area_id",
+          "mode": "goal.patrol_mode"
+        },
+        "output_mapping": {
+          "report": "result.report",
+          "status": "result.status"
+        },
+        "preconditions": {
+          "battery_min": 25,
+          "online": true
+        },
+        "failure_events": [
+          "low_battery",
+          "slip_detected",
+          "action_timeout"
+        ]
+      },
+      {
+        "capability_name": "recheck_area",
+        "ros_interface": {
+          "type": "Action",
+          "name": "/dog_01/recheck_area"
+        },
+        "input_mapping": {
+          "area": "goal.target_area",
+          "source": "goal.source_task"
+        },
+        "output_mapping": {
+          "report": "result.report",
+          "status": "result.status"
+        },
+        "preconditions": {
+          "battery_min": 25,
+          "online": true
+        },
+        "failure_events": [
+          "low_battery",
+          "interface_failed",
+          "slip_detected"
+        ]
+      },
+      {
+        "capability_name": "enter_narrow_area",
+        "ros_interface": {
+          "type": "Action",
+          "name": "/dog_01/enter_narrow_area"
+        },
+        "input_mapping": {
+          "area": "goal.target_area",
+          "mission": "goal.mission_type"
+        },
+        "output_mapping": {
+          "report": "result.report",
+          "status": "result.status"
+        },
+        "preconditions": {
+          "battery_min": 30,
+          "online": true
+        },
+        "failure_events": [
+          "low_battery",
+          "blocked",
+          "sensor_occluded"
+        ]
+      },
+      {
+        "capability_name": "deliver_small_item",
+        "ros_interface": {
+          "type": "Action",
+          "name": "/dog_01/deliver_small_item"
+        },
+        "input_mapping": {
+          "object": "goal.object_id",
+          "target": "goal.target_area"
+        },
+        "output_mapping": {
+          "status": "result.status"
+        },
+        "preconditions": {
+          "battery_min": 25,
+          "online": true
+        },
+        "failure_events": [
+          "low_battery",
+          "blocked",
+          "payload_dropped"
+        ]
+      }
+    ]
+  },
+  {
+    "robot_id": "DOG-02",
+    "robot_type": "DOG",
+    "capabilities": [
+      "patrol_area",
+      "search_person",
+      "enter_narrow_area",
+      "guard_area"
+    ],
+    "state": {
+      "online": true,
+      "battery": 69,
+      "status": "idle",
+      "reachable_areas": [
+        "B区",
+        "C区",
+        "D区",
+        "楼梯间",
+        "地下通道",
+        "狭窄通道",
+        "仓库内场",
+        "异常点周边"
+      ]
+    },
+    "contracts": [
+      {
+        "capability_name": "patrol_area",
+        "ros_interface": {
+          "type": "Action",
+          "name": "/dog_02/patrol_area"
+        },
+        "input_mapping": {
+          "area": "goal.area_id",
+          "mode": "goal.patrol_mode"
+        },
+        "output_mapping": {
+          "report": "result.report",
+          "status": "result.status"
+        },
+        "preconditions": {
+          "battery_min": 25,
+          "online": true
+        },
+        "failure_events": [
+          "low_battery",
+          "slip_detected",
+          "action_timeout"
+        ]
+      },
+      {
+        "capability_name": "search_person",
+        "ros_interface": {
+          "type": "Action",
+          "name": "/dog_02/search_person"
+        },
+        "input_mapping": {
+          "area": "goal.target_area",
+          "target": "goal.person_tag"
+        },
+        "output_mapping": {
+          "person_location": "result.person_pose",
+          "status": "result.status"
+        },
+        "preconditions": {
+          "battery_min": 35,
+          "online": true
+        },
+        "failure_events": [
+          "low_battery",
+          "target_not_found",
+          "sensor_occluded"
+        ]
+      },
+      {
+        "capability_name": "enter_narrow_area",
+        "ros_interface": {
+          "type": "Action",
+          "name": "/dog_02/enter_narrow_area"
+        },
+        "input_mapping": {
+          "area": "goal.target_area",
+          "mission": "goal.mission_type"
+        },
+        "output_mapping": {
+          "report": "result.report",
+          "status": "result.status"
+        },
+        "preconditions": {
+          "battery_min": 30,
+          "online": true
+        },
+        "failure_events": [
+          "low_battery",
+          "blocked",
+          "sensor_occluded"
+        ]
+      },
+      {
+        "capability_name": "guard_area",
+        "ros_interface": {
+          "type": "Action",
+          "name": "/dog_02/guard_area"
+        },
+        "input_mapping": {
+          "area": "goal.area_id",
+          "duration": "goal.duration_sec"
+        },
+        "output_mapping": {
+          "events": "result.event_log",
+          "status": "result.status"
+        },
+        "preconditions": {
+          "battery_min": 30,
+          "online": true
+        },
+        "failure_events": [
+          "low_battery",
+          "intrusion_detected",
+          "action_timeout"
+        ]
       }
     ]
   }

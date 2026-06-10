@@ -147,6 +147,16 @@ public final class Models {
             String explanation
     ) {}
 
+    public record GeneratedRos2Code(
+            String language,
+            String package_name,
+            String entrypoint,
+            List<String> files,
+            String code,
+            List<String> assumptions,
+            List<String> safety_notes
+    ) {}
+
     public record AgentStatus(String name, String status, String output, String implementation) {}
 
     public record LlmTrace(String agent, String provider, String model, long latency_ms, String response_id, Map<String, Object> usage) {}
@@ -171,6 +181,7 @@ public final class Models {
             TaskGraph task_graph,
             ValidationReport validation,
             ExecutionPlan execution_plan,
+            GeneratedRos2Code generated_code,
             RecoveryPlan recovery,
             List<RunLogEntry> run_logs,
             List<String> final_artifacts

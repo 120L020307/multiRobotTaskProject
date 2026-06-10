@@ -19,14 +19,16 @@ public class AgentOrchestrator {
     private final DataLoader dataLoader;
     private final ValidationService validationService;
     private final ContractMatchingService contractMatchingService;
+    private final Ros2CodegenService ros2CodegenService;
     private final RecoveryService recoveryService;
     private final ObjectMapper mapper;
 
-    public AgentOrchestrator(DeepSeekClient llm, DataLoader dataLoader, ValidationService validationService, ContractMatchingService contractMatchingService, RecoveryService recoveryService, ObjectMapper mapper) {
+    public AgentOrchestrator(DeepSeekClient llm, DataLoader dataLoader, ValidationService validationService, ContractMatchingService contractMatchingService, Ros2CodegenService ros2CodegenService, RecoveryService recoveryService, ObjectMapper mapper) {
         this.llm = llm;
         this.dataLoader = dataLoader;
         this.validationService = validationService;
         this.contractMatchingService = contractMatchingService;
+        this.ros2CodegenService = ros2CodegenService;
         this.recoveryService = recoveryService;
         this.mapper = mapper;
     }
@@ -92,6 +94,14 @@ public class AgentOrchestrator {
                 "unmapped", plan.unmapped(),
                 "schedule", plan.schedule()
         ));
+        runLogger.input("Ros2CodegenTool", "输入 SchedulePlan 与 InterfaceBinding，生成 ROS 2 Python 执行骨架", Map.of("schedule", plan.schedule(), "bindings", plan.bindings()));
+        GeneratedRos2Code generatedCode = ros2CodegenService.generate(graph, plan);
+        runLogger.output("Ros2CodegenTool", "输出 GeneratedRos2Code", Map.of(
+                "language", generatedCode.language(),
+                "entrypoint", generatedCode.entrypoint(),
+                "files", generatedCode.files(),
+                "code_lines", generatedCode.code().lines().count()
+        ));
         ExecutionEvent actualEvent = event == null ? defaultEvent(graph, plan) : event;
         String recoveryInput = "TaskGraph：\n" + json(graph) + "\n\n当前计划：\n" + json(plan) + "\n\n异常事件：\n" + json(actualEvent);
         runLogger.input("RecoveryStrategyAgent", "输入任务图/计划/异常事件，生成局部恢复策略", Map.of("prompt", recoveryInput, "schema", recoverySchemaHint()));
@@ -110,10 +120,12 @@ public class AgentOrchestrator {
                 new AgentStatus("规则校验工具", "done", "ValidationReport", "deterministic validator"),
                 new AgentStatus("校验修复 Agent", repairCalled ? "done" : "skipped_or_not_needed", repairCalled ? "RevisedTaskGraph" : "NoRepairNeeded", "DeepSeek Chat Completions API when needed"),
                 new AgentStatus("能力匹配与接口映射工具", "done", "SchedulePlan + InterfaceBinding", "contract matching tool"),
+                new AgentStatus("ROS 2 代码生成工具", "done", "GeneratedRos2Code", "deterministic code generator"),
                 new AgentStatus("异常恢复 Agent", "done", "RecoveryPlan", "DeepSeek Chat Completions API + recovery tool")
         );
-        runLogger.output("Pipeline", "闭环完成，返回最终产物", Map.of("artifacts", List.of("TaskIntent", "EvidenceTaskGraph", "ValidationReport", "SchedulePlan", "InterfaceBinding", "RecoveryPlan")));
-        return new PipelineResponse("real_llm_agents_java", traces.isEmpty() ? "deepseek" : traces.get(0).model(), agents, traces, intent, graph, validation, plan, recovery, runLogger.entries(), List.of("TaskIntent", "EvidenceTaskGraph", "ValidationReport", "SchedulePlan", "InterfaceBinding", "RecoveryPlan"));
+        List<String> artifacts = List.of("TaskIntent", "EvidenceTaskGraph", "ValidationReport", "SchedulePlan", "InterfaceBinding", "GeneratedRos2Code", "RecoveryPlan");
+        runLogger.output("Pipeline", "闭环完成，返回最终产物", Map.of("artifacts", artifacts));
+        return new PipelineResponse("real_llm_agents_java", traces.isEmpty() ? "deepseek" : traces.get(0).model(), agents, traces, intent, graph, validation, plan, generatedCode, recovery, runLogger.entries(), artifacts);
     }
 
     private Map<String, Object> graphSummary(TaskGraph graph) {
@@ -141,7 +153,7 @@ public class AgentOrchestrator {
     private ExecutionEvent defaultEvent(TaskGraph graph, ExecutionPlan plan) {
         InterfaceBinding ugv = plan.bindings().stream().filter(b -> "UGV-01".equals(b.robot_id())).findFirst()
                 .orElse(plan.bindings().stream().filter(b -> "UGV".equals(b.robot_type())).findFirst().orElse(null));
-        List<String> completed = graph.nodes().stream().filter(n -> "UAV".equals(n.actor_type()) || "ARM".equals(n.actor_type())).map(TaskNode::id).toList();
+        List<String> completed = graph.nodes().stream().filter(n -> "UAV".equals(n.actor_type()) || "DOG".equals(n.actor_type())).map(TaskNode::id).toList();
         return new ExecutionEvent("low_battery", ugv == null ? "UGV-01" : ugv.robot_id(), ugv == null ? null : ugv.node_id(), ugv == null ? "/ugv_01/recheck_area" : ugv.ros_interface().name(), completed, "UGV battery below 20% before recheck");
     }
 
@@ -151,12 +163,12 @@ public class AgentOrchestrator {
     }
 
     private String intentPrompt() { return "你是异构多机器人任务理解 Agent。只负责从自然语言中抽取任务目标、机器人类型、对象、区域和条件/异常触发词。不要生成任务图，不要分配机器人。"; }
-    private String graphPrompt() { return "你是证据约束任务图生成 Agent。根据 TaskIntent 和原文生成 TaskGraph。节点必须可执行或可检查；边表达 sequence/parallel/condition/recovery；evidence 必须填写原文连续短语；无法确定的参数写入 missing_fields；不要做具体机器人实例分配。"; }
+    private String graphPrompt() { return "你是证据约束任务图生成 Agent。根据 TaskIntent 和原文生成 TaskGraph。节点只表示 UAV/UGV/DOG 的可执行机器人任务；发现异常、异常检测、电量检测等系统判定不要生成 SYSTEM 节点，应表达为 condition/recovery 边；边表达 sequence/parallel/condition/recovery；evidence 必须填写原文连续短语；无法确定的参数写入 missing_fields；不要做具体机器人实例分配。"; }
     private String evidencePrompt() { return "你是证据绑定 Agent。检查每个节点、边、约束的 evidence 是否为原文连续片段；如不是，请替换为最接近的原文连续短语。不得改动任务语义。"; }
     private String repairPrompt() { return "你是校验修复 Agent。只能根据 ValidationReport 修复 repair_scope 内的问题，不要整体重写任务图。修复后仍需保持 evidence 为原文连续片段。"; }
     private String recoveryPrompt() { return "你是异常恢复 Agent。根据任务图、当前计划和异常事件，给出局部恢复策略说明。你不直接改接口参数，具体重绑定由后端工具完成。"; }
 
-    private String intentSchemaHint() { return "{goal:string, actors:{UAV:boolean,UGV:boolean,ARM:boolean}, objects:string[], areas:string[], conditions:[{type:string,evidence_text:string}], raw_text:string}"; }
+    private String intentSchemaHint() { return "{goal:string, actors:{UAV:boolean,UGV:boolean,DOG:boolean}, objects:string[], areas:string[], conditions:[{type:string,evidence_text:string}], raw_text:string}"; }
     private String graphSchemaHint() { return "{nodes:[{id,task_type,actor_type,params,output,status,confidence,missing_fields,evidence}], edges:[{id,source,target,type,condition,evidence}], constraints:[{type,value,target_actor,evidence}]}"; }
     private String recoverySchemaHint() { return "{strategy:string, reasoning_summary:string, preferred_replacement_rules:string[], risk_notes:string[]}"; }
 }
