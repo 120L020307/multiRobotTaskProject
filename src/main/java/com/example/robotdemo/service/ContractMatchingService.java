@@ -54,7 +54,7 @@ public class ContractMatchingService {
         Map<String, List<String>> adj = new LinkedHashMap<>();
         for (TaskNode node : graph.nodes()) { indeg.put(node.id(), 0); adj.put(node.id(), new ArrayList<>()); }
         for (TaskEdge edge : graph.edges()) {
-            if ("recovery".equals(edge.type()) || "parallel".equals(edge.type())) continue;
+            if ("parallel".equals(edge.type())) continue;
             adj.computeIfAbsent(edge.source(), k -> new ArrayList<>()).add(edge.target());
             indeg.put(edge.target(), indeg.getOrDefault(edge.target(), 0) + 1);
         }

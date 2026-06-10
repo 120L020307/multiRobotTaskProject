@@ -6,6 +6,16 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public final class GraphSupport {
+    private static final Set<String> KNOWN_TASK_TYPES = Set.of(
+            "inspect_area", "recheck_area", "transport_object", "navigate", "patrol_area",
+            "enter_narrow_area", "search_person", "guard_area", "deliver_small_item",
+            "map_area", "track_target", "relay_communication", "clear_obstacle", "tow_robot"
+    );
+    private static final Set<String> GENERIC_ANOMALY_AREAS = Set.of("异常点周边", "异常位置", "异常点", "异常区域");
+    private static final List<String> RECOVERY_CLUES = List.of("低电量", "电量低", "电量不足", "阻塞", "失败", "超时", "low_battery", "blocked", "failed", "timeout", "recover");
+    private static final List<String> PARALLEL_CLUES = List.of("同时", "并行", "与此同时", "同步");
+    private static final List<String> CONDITION_CLUES = List.of("如果", "若", "发现", "条件", "condition");
+
     private GraphSupport() {}
 
     public static EvidenceSpan span(String rawText, Object evidence) {
@@ -63,7 +73,7 @@ public final class GraphSupport {
         List<TaskConstraint> constraints = rawConstraints.stream().map(c -> new TaskConstraint(
                 str(c.get("type")), c.get("value"), c.get("target_actor") == null ? null : str(c.get("target_actor")), span(rawText, c.get("evidence"))
         )).toList();
-        return withCoverage(contractNormalize(new TaskGraph(nodes, edges, constraints, rawText, null)));
+        return contractNormalize(new TaskGraph(nodes, edges, constraints, rawText, null));
     }
 
     public static TaskGraph contractNormalize(TaskGraph graph) {
@@ -99,12 +109,11 @@ public final class GraphSupport {
                 missing.remove("area");
                 missing.remove("source");
             }
-            if ("pick_object".equals(taskType)) {
-                if (!params.containsKey("area") && params.containsKey("source")) params.put("area", params.get("source"));
-                params.putIfAbsent("area", "工具间");
-                params.putIfAbsent("object", inferObject(folded.raw_text(), params, "工具箱"));
-                missing.remove("area");
+            if ("transport_object".equals(taskType) || "deliver_small_item".equals(taskType)) {
+                params.putIfAbsent("object", inferObject(folded.raw_text(), params, "物资"));
+                params.putIfAbsent("target", params.getOrDefault("area", inferArea(folded.raw_text(), params, "异常点周边")));
                 missing.remove("object");
+                missing.remove("target");
             }
             return new TaskNode(node.id(), taskType, actorType, params, node.output(), node.status(), node.confidence(), new ArrayList<>(missing), node.evidence());
         }).collect(Collectors.toList());
@@ -187,7 +196,7 @@ public final class GraphSupport {
         input.forEach((key, value) -> params.put(normalizeParamKey(key), value));
         if ("inspect_area".equals(taskType)) params.putIfAbsent("area", inferArea(rawText, params, null));
         if ("recheck_area".equals(taskType)) params.putIfAbsent("area", inferArea(rawText, params, "异常点周边"));
-        if ("pick_object".equals(taskType) || "transport_object".equals(taskType)) params.putIfAbsent("object", inferObject(rawText, params, null));
+        if ("transport_object".equals(taskType) || "deliver_small_item".equals(taskType)) params.putIfAbsent("object", inferObject(rawText, params, null));
         return params;
     }
 
@@ -244,14 +253,14 @@ public final class GraphSupport {
     private static String normalizeTaskType(String taskType, String actorType) {
         String value = str(taskType).trim();
         String lower = value.toLowerCase(Locale.ROOT);
-        if (Set.of("inspect_area", "recheck_area", "pick_object", "place_object", "transport_object", "navigate", "patrol_area", "enter_narrow_area", "search_person", "guard_area", "deliver_small_item", "map_area", "track_target", "relay_communication", "clear_obstacle", "tow_robot").contains(lower)) return lower;
-        if ("DOG".equals(actorType) && (lower.contains("patrol") || value.contains("巡逻") || value.contains("值守"))) return "patrol_area";
-        if ("DOG".equals(actorType) && (value.contains("狭窄") || value.contains("楼梯") || value.contains("管廊") || value.contains("地下通道") || lower.contains("narrow"))) return "enter_narrow_area";
-        if ("DOG".equals(actorType) && (value.contains("搜索") || value.contains("搜寻") || value.contains("人员") || lower.contains("search"))) return "search_person";
-        if (lower.contains("inspect") || lower.contains("patrol") || value.contains("巡检") || value.contains("巡视") || value.contains("检查")) return "inspect_area";
+        if (KNOWN_TASK_TYPES.contains(lower)) return lower;
         if (lower.contains("recheck") || lower.contains("review") || value.contains("复查") || value.contains("复检") || value.contains("核查")) return "recheck_area";
-        if (lower.contains("pick") || lower.contains("grasp") || value.contains("抓取") || value.contains("拿取") || value.contains("拾取")) return "pick_object";
-        if (lower.contains("place") || value.contains("放置") || value.contains("放下")) return "place_object";
+        if ("DOG".equals(actorType) && (lower.contains("patrol") || value.contains("巡逻") || value.contains("值守"))) return "patrol_area";
+        if ("DOG".equals(actorType) && (value.contains("搜索") || value.contains("搜寻") || value.contains("人员") || lower.contains("search"))) return "search_person";
+        if ("DOG".equals(actorType) && (value.contains("狭窄") || value.contains("楼梯") || value.contains("管廊") || value.contains("地下通道") || lower.contains("narrow"))) return "enter_narrow_area";
+        if (lower.contains("inspect") || lower.contains("patrol") || value.contains("巡检") || value.contains("巡视") || value.contains("检查")) return "inspect_area";
+        if (lower.contains("pick") || lower.contains("grasp") || value.contains("抓取") || value.contains("拿取") || value.contains("拾取")) return "deliver_small_item";
+        if (lower.contains("place") || value.contains("放置") || value.contains("放下")) return "deliver_small_item";
         if (lower.contains("transport") || value.contains("运输") || value.contains("搬运")) return "transport_object";
         if (value.contains("换车") || value.contains("替换") || value.contains("接替") || value.contains("继续复查")) return "recheck_area";
         if (value.contains("异常") && "UAV".equals(actorType)) return "inspect_area";
@@ -262,17 +271,24 @@ public final class GraphSupport {
         String value = str(type).trim().toLowerCase(Locale.ROOT);
         String clue = (str(evidence == null ? null : evidence.text()) + " " + str(condition)).trim();
         String lowerClue = clue.toLowerCase(Locale.ROOT);
-        if (clue.contains("低电量") || clue.contains("电量低") || clue.contains("电量不足") || clue.contains("阻塞") || clue.contains("失败") || clue.contains("超时")
-                || lowerClue.contains("low_battery") || lowerClue.contains("blocked") || lowerClue.contains("failed") || lowerClue.contains("timeout") || lowerClue.contains("recover")) return "recovery";
-        if (clue.contains("同时") || clue.contains("并行") || clue.contains("与此同时") || clue.contains("同步")) return "parallel";
-        if (clue.contains("如果") || clue.contains("若") || clue.contains("发现") || clue.contains("条件") || value.contains("condition")) return "condition";
+        if (containsAny(clue, lowerClue, RECOVERY_CLUES)) return "recovery";
+        if (containsAny(clue, lowerClue, PARALLEL_CLUES)) return "parallel";
+        if (containsAny(clue, lowerClue, CONDITION_CLUES) || value.contains("condition")) return "condition";
         if (Set.of("sequence", "parallel", "condition", "recovery").contains(value)) return value;
         return value.isBlank() ? "sequence" : value;
     }
 
     private static boolean isGenericAnomalyArea(Object value) {
         String text = str(value).trim();
-        return text.isBlank() || text.equals("异常点周边") || text.equals("异常位置") || text.equals("异常点") || text.equals("异常区域");
+        return text.isBlank() || GENERIC_ANOMALY_AREAS.contains(text);
+    }
+
+    private static boolean containsAny(String original, String lower, List<String> clues) {
+        for (String clue : clues) {
+            String target = clue.chars().anyMatch(ch -> ch > 127) ? original : lower;
+            if (target.contains(clue)) return true;
+        }
+        return false;
     }
 
     private static EvidenceSpan inferNodeEvidence(String rawText, String taskType, String actorType, String originalTaskType, Map<String, Object> params) {
@@ -280,7 +296,7 @@ public final class GraphSupport {
         candidates.add(str(originalTaskType));
         if ("inspect_area".equals(taskType)) candidates.addAll(List.of("无人机先巡检A区", "巡检A区", "巡检"));
         if ("recheck_area".equals(taskType)) candidates.addAll(List.of("派无人车到异常点周边复查", "换另一台无人车继续复查", "异常点周边复查", "继续复查", "复查"));
-        if ("pick_object".equals(taskType)) candidates.addAll(List.of("抓取工具箱", "工具箱", "抓取"));
+        if ("deliver_small_item".equals(taskType)) candidates.addAll(List.of("急救包", "小件", "配送", "递送", "抓取工具箱", "工具箱"));
         if ("transport_object".equals(taskType)) candidates.addAll(List.of("运输", "搬运"));
         params.values().forEach(value -> candidates.add(str(value)));
         for (String candidate : candidates) {

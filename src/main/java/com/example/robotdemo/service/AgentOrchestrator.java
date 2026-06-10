@@ -153,7 +153,7 @@ public class AgentOrchestrator {
     private ExecutionEvent defaultEvent(TaskGraph graph, ExecutionPlan plan) {
         InterfaceBinding ugv = plan.bindings().stream().filter(b -> "UGV-01".equals(b.robot_id())).findFirst()
                 .orElse(plan.bindings().stream().filter(b -> "UGV".equals(b.robot_type())).findFirst().orElse(null));
-        List<String> completed = graph.nodes().stream().filter(n -> "UAV".equals(n.actor_type()) || "DOG".equals(n.actor_type())).map(TaskNode::id).toList();
+        List<String> completed = graph.nodes().stream().filter(n -> "UAV".equals(n.actor_type())).map(TaskNode::id).toList();
         return new ExecutionEvent("low_battery", ugv == null ? "UGV-01" : ugv.robot_id(), ugv == null ? null : ugv.node_id(), ugv == null ? "/ugv_01/recheck_area" : ugv.ros_interface().name(), completed, "UGV battery below 20% before recheck");
     }
 

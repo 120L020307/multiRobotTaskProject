@@ -41,9 +41,12 @@ public class ValidationService {
                 Map<String, Object> state = robot.state() == null ? Map.of() : robot.state();
                 boolean onlineOk = !pre.containsKey("online") || Objects.equals(state.get("online"), pre.get("online"));
                 boolean batteryOk = !pre.containsKey("battery_min") || number(state.get("battery")) >= number(pre.get("battery_min"));
-                Object area = node.params().get("area");
-                boolean reachableOk = area == null || String.valueOf(area).startsWith("${") || ((List<?>) state.getOrDefault("reachable_areas", List.of())).contains(area);
-                boolean paramsOk = contract.input_mapping().keySet().stream().allMatch(k -> node.params().containsKey(k));
+                Map<String, Object> params = node.params() == null ? Map.of() : node.params();
+                Object area = params.get("area");
+                Object reachableAreas = state.getOrDefault("reachable_areas", List.of());
+                boolean reachableOk = area == null || String.valueOf(area).startsWith("${") || (reachableAreas instanceof List<?> list && list.contains(area));
+                Map<String, String> inputMapping = contract.input_mapping() == null ? Map.of() : contract.input_mapping();
+                boolean paramsOk = inputMapping.keySet().stream().allMatch(params::containsKey);
                 boolean feasible = onlineOk && batteryOk && reachableOk && paramsOk;
                 if (!enforceState || feasible) out.add(new Candidate(robot, contract, feasible, Map.of("onlineOk", onlineOk, "batteryOk", batteryOk, "reachableOk", reachableOk, "paramsOk", paramsOk)));
             }
