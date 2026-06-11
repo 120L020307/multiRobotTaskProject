@@ -41,94 +41,145 @@ public class AgentOrchestrator {
 
     public PipelineResponse run(String text, ExecutionEvent event, RunLogger runLogger) {
         List<LlmTrace> traces = new ArrayList<>();
-        List<RobotContract> contracts = dataLoader.contracts();
+        BlackboardWorkspace blackboard = new BlackboardWorkspace(text, event, dataLoader.contracts());
+        List<RobotContract> contracts = blackboard.contracts();
 
-        Map<String, Object> pipelineInput = new LinkedHashMap<>();
-        pipelineInput.put("text", text);
-        pipelineInput.put("event", event);
-        pipelineInput.put("contract_robot_count", contracts.size());
-        runLogger.input("Pipeline", "收到自然语言任务", pipelineInput);
+        Map<String, Object> blackboardInput = new LinkedHashMap<>();
+        blackboardInput.put("text", blackboard.rawText());
+        blackboardInput.put("event", blackboard.event());
+        blackboardInput.put("contract_robot_count", contracts.size());
+        blackboardInput.put("workspace", blackboard.snapshot());
+        runLogger.input("Blackboard", "初始化版本化黑板", blackboardInput);
 
-        String intentInput = "自然语言任务：\n" + text;
-        runLogger.input("TaskIntentAgent", "输入原始任务文本，抽取目标/参与机器人/区域/条件", Map.of("prompt", intentInput, "schema", intentSchemaHint()));
+        runTaskIntentAgent(blackboard, traces, runLogger);
+        runTaskGraphAgent(blackboard, traces, runLogger);
+        runEvidenceBindingAgent(blackboard, traces, runLogger);
+        boolean repairCalled = runValidationAndRepairAgents(blackboard, traces, runLogger);
+        runContractMatchingTool(blackboard, runLogger);
+        runRos2CodegenTool(blackboard, runLogger);
+        runRecoveryAgents(blackboard, traces, runLogger);
+
+        List<AgentStatus> agents = List.of(
+                new AgentStatus("任务理解 Agent", "done", "TaskIntent", "read: RawTaskText; write: TaskIntent"),
+                new AgentStatus("任务图生成 Agent", "done", "DraftTaskGraph", "read: RawTaskText + TaskIntent + CapabilityContracts; write: TaskGraph"),
+                new AgentStatus("证据绑定 Agent", "done", "EvidenceTaskGraph", "read: RawTaskText + TaskGraph; write: TaskGraph"),
+                new AgentStatus("规则校验工具", "done", "ValidationReport", "read: TaskGraph + CapabilityContracts; write: ValidationReport"),
+                new AgentStatus("校验修复 Agent", repairCalled ? "done" : "skipped_or_not_needed", repairCalled ? "RevisedTaskGraph" : "NoRepairNeeded", "read: TaskGraph + ValidationReport; write: TaskGraph"),
+                new AgentStatus("能力匹配与接口映射工具", "done", "SchedulePlan + InterfaceBinding", "read: TaskGraph + CapabilityContracts; write: ExecutionPlan"),
+                new AgentStatus("ROS 2 代码生成工具", "done", "GeneratedRos2Code", "read: TaskGraph + ExecutionPlan; write: GeneratedRos2Code"),
+                new AgentStatus("异常恢复 Agent", "done", "RecoveryPlan", "read: Event + TaskGraph + ExecutionPlan + CapabilityContracts; write: RecoveryPlan")
+        );
+        List<String> artifacts = List.of("TaskIntent", "EvidenceTaskGraph", "ValidationReport", "SchedulePlan", "InterfaceBinding", "GeneratedRos2Code", "RecoveryPlan", "BlackboardTrace");
+        runLogger.output("Blackboard", "黑板协作完成，返回最终产物", Map.of("artifacts", artifacts, "workspace", blackboard.snapshot()));
+        return new PipelineResponse(
+                "blackboard_agents_java",
+                traces.isEmpty() ? "deepseek" : traces.get(0).model(),
+                agents,
+                traces,
+                blackboard.intent(),
+                blackboard.taskGraph(),
+                blackboard.validation(),
+                blackboard.executionPlan(),
+                blackboard.generatedCode(),
+                blackboard.recoveryPlan(),
+                runLogger.entries(),
+                artifacts
+        );
+    }
+
+    private void runTaskIntentAgent(BlackboardWorkspace blackboard, List<LlmTrace> traces, RunLogger runLogger) {
+        String intentInput = "自然语言任务：\n" + blackboard.rawText();
+        runLogger.input("TaskIntentAgent", "从黑板读取 RawTaskText，抽取目标/参与机器人/区域/条件", Map.of("read", List.of("RawTaskText"), "write", "TaskIntent", "prompt", intentInput, "schema", intentSchemaHint()));
         AgentResult intentResult = llm.callJsonAgent("TaskIntentAgent", intentPrompt(), intentInput, intentSchemaHint());
         traces.add(intentResult.trace());
         TaskIntent intent = mapper.convertValue(intentResult.data(), TaskIntent.class);
-        runLogger.output("TaskIntentAgent", "输出 TaskIntent", intent);
+        blackboard.write("TaskIntentAgent", "TaskIntent", intent, "自然语言任务意图结构化");
+        runLogger.output("TaskIntentAgent", "写入黑板 TaskIntent", intent);
+    }
 
-        String capabilityHint = capabilityNormalizer.capabilityHint(contracts);
-        String graphInput = "原文：\n" + text + "\n\nTaskIntent：\n" + json(intent) + "\n\n可用标准能力：\n" + capabilityHint;
-        runLogger.input("TaskGraphAgent", "输入原文与 TaskIntent，生成初始任务图", Map.of("prompt", graphInput, "schema", graphSchemaHint()));
+    private void runTaskGraphAgent(BlackboardWorkspace blackboard, List<LlmTrace> traces, RunLogger runLogger) {
+        String capabilityHint = capabilityNormalizer.capabilityHint(blackboard.contracts());
+        String graphInput = "原文：\n" + blackboard.rawText() + "\n\nTaskIntent：\n" + json(blackboard.intent()) + "\n\n可用标准能力：\n" + capabilityHint;
+        runLogger.input("TaskGraphAgent", "从黑板读取 TaskIntent 与契约，生成初始任务图", Map.of("read", List.of("RawTaskText", "TaskIntent", "CapabilityContracts"), "write", "TaskGraph", "prompt", graphInput, "schema", graphSchemaHint()));
         AgentResult graphResult = llm.callJsonAgent("TaskGraphAgent", graphPrompt(), graphInput, graphSchemaHint());
         traces.add(graphResult.trace());
-        TaskGraph graph = capabilityNormalizer.normalize(GraphSupport.mapToGraph(graphResult.data(), text), contracts);
-        runLogger.output("TaskGraphAgent", "输出 DraftTaskGraph", graphSummary(graph));
+        TaskGraph graph = capabilityNormalizer.normalize(GraphSupport.mapToGraph(graphResult.data(), blackboard.rawText()), blackboard.contracts());
+        blackboard.write("TaskGraphAgent", "TaskGraph", graph, "生成 DraftTaskGraph");
+        runLogger.output("TaskGraphAgent", "写入黑板 DraftTaskGraph", graphSummary(graph));
+    }
 
-        String evidenceInput = "原文：\n" + text + "\n\nTaskGraph：\n" + json(graph);
-        runLogger.input("EvidenceBindingAgent", "输入初始任务图，校正 evidence_span", Map.of("prompt", evidenceInput, "schema", graphSchemaHint()));
+    private void runEvidenceBindingAgent(BlackboardWorkspace blackboard, List<LlmTrace> traces, RunLogger runLogger) {
+        String evidenceInput = "原文：\n" + blackboard.rawText() + "\n\nTaskGraph：\n" + json(blackboard.taskGraph());
+        runLogger.input("EvidenceBindingAgent", "从黑板读取 TaskGraph，校正 evidence_span", Map.of("read", List.of("RawTaskText", "TaskGraph"), "write", "TaskGraph", "prompt", evidenceInput, "schema", graphSchemaHint()));
         AgentResult evidenceResult = llm.callJsonAgent("EvidenceBindingAgent", evidencePrompt(), evidenceInput, graphSchemaHint());
         traces.add(evidenceResult.trace());
-        graph = capabilityNormalizer.normalize(GraphSupport.mapToGraph(evidenceResult.data(), text), contracts);
-        runLogger.output("EvidenceBindingAgent", "输出 EvidenceTaskGraph", graphSummary(graph));
+        TaskGraph graph = capabilityNormalizer.normalize(GraphSupport.mapToGraph(evidenceResult.data(), blackboard.rawText()), blackboard.contracts());
+        blackboard.write("EvidenceBindingAgent", "TaskGraph", graph, "证据绑定后的 EvidenceTaskGraph");
+        runLogger.output("EvidenceBindingAgent", "更新黑板 EvidenceTaskGraph", graphSummary(graph));
+    }
 
-        runLogger.input("ValidationTool", "输入 EvidenceTaskGraph 与能力契约库，执行确定性校验", Map.of("graph", graphSummary(graph), "contracts", contractSummary(contracts)));
-        ValidationReport validation = validationService.validate(graph, contracts);
-        runLogger.output("ValidationTool", "输出 ValidationReport", validation);
-        boolean repairCalled = false;
-        if (!validation.overall_valid()) {
-            repairCalled = true;
-            String repairInput = "原文：\n" + text + "\n\n当前 TaskGraph：\n" + json(graph) + "\n\nValidationReport：\n" + json(validation);
-            runLogger.input("ValidationRepairAgent", "输入校验错误，按 repair_scope 局部修复任务图", Map.of("prompt", repairInput, "schema", graphSchemaHint()));
-            AgentResult repairResult = llm.callJsonAgent("ValidationRepairAgent", repairPrompt(), repairInput, graphSchemaHint());
-            traces.add(repairResult.trace());
-            graph = capabilityNormalizer.normalize(GraphSupport.mapToGraph(repairResult.data(), text), contracts);
-            runLogger.output("ValidationRepairAgent", "输出 RevisedTaskGraph", graphSummary(graph));
-            runLogger.input("ValidationTool", "对修复后的任务图再次校验", graphSummary(graph));
-            validation = validationService.validate(graph, contracts);
-            runLogger.output("ValidationTool", "输出二次 ValidationReport", validation);
-        } else {
+    private boolean runValidationAndRepairAgents(BlackboardWorkspace blackboard, List<LlmTrace> traces, RunLogger runLogger) {
+        runLogger.input("ValidationTool", "从黑板读取 EvidenceTaskGraph 与能力契约库，执行确定性校验", Map.of("read", List.of("TaskGraph", "CapabilityContracts"), "write", "ValidationReport", "graph", graphSummary(blackboard.taskGraph()), "contracts", contractSummary(blackboard.contracts())));
+        ValidationReport validation = validationService.validate(blackboard.taskGraph(), blackboard.contracts());
+        blackboard.write("ValidationTool", "ValidationReport", validation, "确定性任务图校验结果");
+        runLogger.output("ValidationTool", "写入黑板 ValidationReport", validation);
+        if (validation.overall_valid()) {
             runLogger.info("ValidationRepairAgent", "校验通过，跳过修复 Agent", Map.of("reason", "overall_valid=true"));
+            return false;
         }
 
-        runLogger.input("ContractMatchingTool", "输入有效任务图与能力契约，生成接口绑定和调度顺序", Map.of("graph", graphSummary(graph), "contracts", contractSummary(contracts)));
-        ExecutionPlan plan = contractMatchingService.buildPlan(graph, contracts);
-        runLogger.output("ContractMatchingTool", "输出 SchedulePlan 与 InterfaceBinding", Map.of(
+        String repairInput = "原文：\n" + blackboard.rawText() + "\n\n当前 TaskGraph：\n" + json(blackboard.taskGraph()) + "\n\nValidationReport：\n" + json(validation);
+        runLogger.input("ValidationRepairAgent", "从黑板读取校验错误，按 repair_scope 局部修复任务图", Map.of("read", List.of("RawTaskText", "TaskGraph", "ValidationReport"), "write", "TaskGraph", "prompt", repairInput, "schema", graphSchemaHint()));
+        AgentResult repairResult = llm.callJsonAgent("ValidationRepairAgent", repairPrompt(), repairInput, graphSchemaHint());
+        traces.add(repairResult.trace());
+        TaskGraph graph = capabilityNormalizer.normalize(GraphSupport.mapToGraph(repairResult.data(), blackboard.rawText()), blackboard.contracts());
+        blackboard.write("ValidationRepairAgent", "TaskGraph", graph, "按 ValidationReport 局部修复后的 RevisedTaskGraph");
+        runLogger.output("ValidationRepairAgent", "更新黑板 RevisedTaskGraph", graphSummary(graph));
+
+        runLogger.input("ValidationTool", "对修复后的任务图再次校验", Map.of("read", List.of("TaskGraph", "CapabilityContracts"), "write", "ValidationReport", "graph", graphSummary(graph)));
+        validation = validationService.validate(graph, blackboard.contracts());
+        blackboard.write("ValidationTool", "ValidationReport", validation, "修复后的二次校验结果");
+        runLogger.output("ValidationTool", "更新黑板二次 ValidationReport", validation);
+        return true;
+    }
+
+    private void runContractMatchingTool(BlackboardWorkspace blackboard, RunLogger runLogger) {
+        runLogger.input("ContractMatchingTool", "从黑板读取有效任务图与能力契约，生成接口绑定和调度顺序", Map.of("read", List.of("TaskGraph", "CapabilityContracts"), "write", "ExecutionPlan", "graph", graphSummary(blackboard.taskGraph()), "contracts", contractSummary(blackboard.contracts())));
+        ExecutionPlan plan = contractMatchingService.buildPlan(blackboard.taskGraph(), blackboard.contracts());
+        blackboard.write("ContractMatchingTool", "ExecutionPlan", plan, "契约匹配、接口绑定与调度计划");
+        runLogger.output("ContractMatchingTool", "写入黑板 SchedulePlan 与 InterfaceBinding", Map.of(
                 "binding_count", plan.bindings().size(),
                 "unmapped", plan.unmapped(),
                 "schedule", plan.schedule()
         ));
-        runLogger.input("Ros2CodegenTool", "输入 SchedulePlan 与 InterfaceBinding，生成 ROS 2 Python 执行骨架", Map.of("schedule", plan.schedule(), "bindings", plan.bindings()));
-        GeneratedRos2Code generatedCode = ros2CodegenService.generate(graph, plan);
-        runLogger.output("Ros2CodegenTool", "输出 GeneratedRos2Code", Map.of(
+    }
+
+    private void runRos2CodegenTool(BlackboardWorkspace blackboard, RunLogger runLogger) {
+        runLogger.input("Ros2CodegenTool", "从黑板读取 SchedulePlan 与 InterfaceBinding，生成 ROS 2 Python 执行骨架", Map.of("read", List.of("TaskGraph", "ExecutionPlan"), "write", "GeneratedRos2Code", "schedule", blackboard.executionPlan().schedule(), "bindings", blackboard.executionPlan().bindings()));
+        GeneratedRos2Code generatedCode = ros2CodegenService.generate(blackboard.taskGraph(), blackboard.executionPlan());
+        blackboard.write("Ros2CodegenTool", "GeneratedRos2Code", generatedCode, "ROS 2 Python 执行骨架");
+        runLogger.output("Ros2CodegenTool", "写入黑板 GeneratedRos2Code", Map.of(
                 "language", generatedCode.language(),
                 "entrypoint", generatedCode.entrypoint(),
                 "files", generatedCode.files(),
                 "code_lines", generatedCode.code().lines().count()
         ));
-        ExecutionEvent actualEvent = event == null ? defaultEvent(graph, plan) : event;
-        String recoveryInput = "TaskGraph：\n" + json(graph) + "\n\n当前计划：\n" + json(plan) + "\n\n异常事件：\n" + json(actualEvent);
-        runLogger.input("RecoveryStrategyAgent", "输入任务图/计划/异常事件，生成局部恢复策略", Map.of("prompt", recoveryInput, "schema", recoverySchemaHint()));
+    }
+
+    private void runRecoveryAgents(BlackboardWorkspace blackboard, List<LlmTrace> traces, RunLogger runLogger) {
+        ExecutionEvent actualEvent = blackboard.event() == null ? defaultEvent(blackboard.taskGraph(), blackboard.executionPlan()) : blackboard.event();
+        blackboard.write("EventMonitor", "ExecutionEvent", actualEvent, blackboard.event() == null ? "生成默认演示异常事件" : "使用外部输入异常事件");
+        String recoveryInput = "TaskGraph：\n" + json(blackboard.taskGraph()) + "\n\n当前计划：\n" + json(blackboard.executionPlan()) + "\n\n异常事件：\n" + json(actualEvent);
+        runLogger.input("RecoveryStrategyAgent", "从黑板读取任务图/计划/异常事件，生成局部恢复策略", Map.of("read", List.of("TaskGraph", "ExecutionPlan", "ExecutionEvent"), "write", "RecoveryStrategy", "prompt", recoveryInput, "schema", recoverySchemaHint()));
         AgentResult strategyResult = llm.callJsonAgent("RecoveryStrategyAgent", recoveryPrompt(), recoveryInput, recoverySchemaHint());
         traces.add(strategyResult.trace());
         RecoveryStrategy strategy = mapper.convertValue(strategyResult.data(), RecoveryStrategy.class);
-        runLogger.output("RecoveryStrategyAgent", "输出恢复策略", strategy);
-        runLogger.input("RecoveryTool", "输入恢复策略，执行受影响子图计算与机器人重绑定", Map.of("event", actualEvent, "strategy", strategy));
-        RecoveryPlan recovery = recoveryService.recover(graph, plan, actualEvent, contracts, strategy);
-        runLogger.output("RecoveryTool", "输出 RecoveryPlan", recovery);
-
-        List<AgentStatus> agents = List.of(
-                new AgentStatus("任务理解 Agent", "done", "TaskIntent", "DeepSeek Chat Completions API"),
-                new AgentStatus("任务图生成 Agent", "done", "DraftTaskGraph", "DeepSeek Chat Completions API"),
-                new AgentStatus("证据绑定 Agent", "done", "EvidenceTaskGraph", "DeepSeek Chat Completions API + span normalization tool"),
-                new AgentStatus("规则校验工具", "done", "ValidationReport", "deterministic validator"),
-                new AgentStatus("校验修复 Agent", repairCalled ? "done" : "skipped_or_not_needed", repairCalled ? "RevisedTaskGraph" : "NoRepairNeeded", "DeepSeek Chat Completions API when needed"),
-                new AgentStatus("能力匹配与接口映射工具", "done", "SchedulePlan + InterfaceBinding", "contract matching tool"),
-                new AgentStatus("ROS 2 代码生成工具", "done", "GeneratedRos2Code", "deterministic code generator"),
-                new AgentStatus("异常恢复 Agent", "done", "RecoveryPlan", "DeepSeek Chat Completions API + recovery tool")
-        );
-        List<String> artifacts = List.of("TaskIntent", "EvidenceTaskGraph", "ValidationReport", "SchedulePlan", "InterfaceBinding", "GeneratedRos2Code", "RecoveryPlan");
-        runLogger.output("Pipeline", "闭环完成，返回最终产物", Map.of("artifacts", artifacts));
-        return new PipelineResponse("real_llm_agents_java", traces.isEmpty() ? "deepseek" : traces.get(0).model(), agents, traces, intent, graph, validation, plan, generatedCode, recovery, runLogger.entries(), artifacts);
+        blackboard.write("RecoveryStrategyAgent", "RecoveryStrategy", strategy, "局部恢复策略说明");
+        runLogger.output("RecoveryStrategyAgent", "写入黑板 RecoveryStrategy", strategy);
+        runLogger.input("RecoveryTool", "从黑板读取恢复策略，执行受影响子图计算与机器人重绑定", Map.of("read", List.of("TaskGraph", "ExecutionPlan", "ExecutionEvent", "CapabilityContracts", "RecoveryStrategy"), "write", "RecoveryPlan", "event", actualEvent, "strategy", strategy));
+        RecoveryPlan recovery = recoveryService.recover(blackboard.taskGraph(), blackboard.executionPlan(), actualEvent, blackboard.contracts(), strategy);
+        blackboard.write("RecoveryTool", "RecoveryPlan", recovery, "最小扰动恢复计划");
+        runLogger.output("RecoveryTool", "写入黑板 RecoveryPlan", recovery);
     }
 
     private Map<String, Object> graphSummary(TaskGraph graph) {

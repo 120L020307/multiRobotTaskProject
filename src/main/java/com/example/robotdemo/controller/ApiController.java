@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -116,8 +117,20 @@ public class ApiController {
                 emitter.complete();
             } catch (Exception e) {
                 log.error("[{}] pipeline stream failed", runId, e);
-                send(emitter, "log", Map.of("run_id", runId, "stage", "Pipeline", "direction", "info", "title", "运行失败", "payload", Map.of("error", e.getMessage())));
-                send(emitter, "error", Map.of("error", e.getMessage(), "code", "java_backend_error", "run_id", runId));
+                Map<String, Object> errorPayload = new LinkedHashMap<>();
+                errorPayload.put("error", e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+                Map<String, Object> logPayload = new LinkedHashMap<>();
+                logPayload.put("run_id", runId);
+                logPayload.put("stage", "Pipeline");
+                logPayload.put("direction", "info");
+                logPayload.put("title", "运行失败");
+                logPayload.put("payload", errorPayload);
+                send(emitter, "log", logPayload);
+                Map<String, Object> errorEvent = new LinkedHashMap<>();
+                errorEvent.put("error", errorPayload.get("error"));
+                errorEvent.put("code", "java_backend_error");
+                errorEvent.put("run_id", runId);
+                send(emitter, "error", errorEvent);
                 emitter.complete();
             }
         });
