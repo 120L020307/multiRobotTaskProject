@@ -87,6 +87,58 @@ public class AgentOrchestrator {
         );
     }
 
+    public PipelineResponse runManualGraph(String text, TaskGraph graph, ExecutionEvent event) {
+        return runManualGraph(text, graph, event, RunLogger.buffered(UUID.randomUUID().toString(), log, mapper));
+    }
+
+    public PipelineResponse runManualGraph(String text, TaskGraph graph, ExecutionEvent event, RunLogger runLogger) {
+        List<LlmTrace> traces = new ArrayList<>();
+        BlackboardWorkspace blackboard = new BlackboardWorkspace(text, event, dataLoader.contracts());
+        TaskGraph normalizedGraph = GraphSupport.withCoverage(capabilityNormalizer.normalize(graph, blackboard.contracts()));
+
+        runLogger.input("ManualGraphEditor", "读取前端手动建模任务图", Map.of(
+                "read", List.of("ManualTaskGraph", "CapabilityContracts"),
+                "write", "TaskGraph",
+                "graph", graphSummary(normalizedGraph)
+        ));
+        blackboard.write("ManualGraphEditor", "TaskGraph", normalizedGraph, "前端拖拽/JSON 手动建模后的任务图");
+        runLogger.output("ManualGraphEditor", "写入黑板 ManualTaskGraph", graphSummary(normalizedGraph));
+
+        runLogger.input("ValidationTool", "校验手动任务图的 DAG、能力、证据和契约约束", Map.of("graph", graphSummary(blackboard.taskGraph()), "contracts", contractSummary(blackboard.contracts())));
+        ValidationReport validation = validationService.validate(blackboard.taskGraph(), blackboard.contracts());
+        blackboard.write("ValidationTool", "ValidationReport", validation, "手动任务图确定性校验结果");
+        runLogger.output("ValidationTool", "写入黑板 ValidationReport", validation);
+
+        runContractMatchingTool(blackboard, runLogger);
+        runRos2CodegenTool(blackboard, runLogger);
+        runRecoveryAgents(blackboard, traces, runLogger);
+
+        List<AgentStatus> agents = List.of(
+                new AgentStatus("手动任务图建模器", "done", "ManualTaskGraph", "read: VisualEditor/JSON; write: TaskGraph"),
+                new AgentStatus("规则校验工具", "done", "ValidationReport", "read: TaskGraph + CapabilityContracts; write: ValidationReport"),
+                new AgentStatus("能力匹配与接口映射工具", "done", "SchedulePlan + InterfaceBinding", "read: TaskGraph + CapabilityContracts; write: ExecutionPlan"),
+                new AgentStatus("ROS 2 代码生成工具", "done", "GeneratedRos2Code", "read: TaskGraph + ExecutionPlan; write: GeneratedRos2Code"),
+                new AgentStatus("异常恢复 Agent", "done", "RecoveryPlan", "read: Event + TaskGraph + ExecutionPlan + CapabilityContracts; write: RecoveryPlan")
+        );
+        List<String> artifacts = List.of("ManualTaskGraph", "ValidationReport", "SchedulePlan", "InterfaceBinding", "GeneratedRos2Code", "RecoveryPlan", "BlackboardTrace");
+        runLogger.output("Blackboard", "手动建模闭环完成，返回最终产物", Map.of("artifacts", artifacts, "workspace", blackboard.snapshot()));
+
+        return new PipelineResponse(
+                "manual_graph_editor_java",
+                traces.isEmpty() ? "deterministic_tools" : traces.get(0).model(),
+                agents,
+                traces,
+                null,
+                blackboard.taskGraph(),
+                blackboard.validation(),
+                blackboard.executionPlan(),
+                blackboard.generatedCode(),
+                blackboard.recoveryPlan(),
+                runLogger.entries(),
+                artifacts
+        );
+    }
+
     private void runTaskIntentAgent(BlackboardWorkspace blackboard, List<LlmTrace> traces, RunLogger runLogger) {
         String intentInput = "自然语言任务：\n" + blackboard.rawText();
         runLogger.input("TaskIntentAgent", "从黑板读取 RawTaskText，抽取目标/参与机器人/区域/条件", Map.of("read", List.of("RawTaskText"), "write", "TaskIntent", "prompt", intentInput, "schema", intentSchemaHint()));

@@ -7,6 +7,8 @@ public final class Models {
 
     public record PipelineRequest(String text, ExecutionEvent event) {}
 
+    public record ManualGraphRequest(String text, TaskGraph graph, ExecutionEvent event) {}
+
     public record EvidenceSpan(String text, int start, int end) {}
 
     public record TaskIntent(

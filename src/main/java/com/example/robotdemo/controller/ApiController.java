@@ -1,6 +1,7 @@
 package com.example.robotdemo.controller;
 
 import com.example.robotdemo.config.LlmProperties;
+import com.example.robotdemo.model.Models.ManualGraphRequest;
 import com.example.robotdemo.model.Models.PipelineRequest;
 import com.example.robotdemo.model.Models.PipelineResponse;
 import com.example.robotdemo.model.Models.RobotContract;
@@ -97,6 +98,23 @@ public class ApiController {
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             return ResponseEntity.status(500).body(Map.of("error", e.getMessage(), "code", "java_backend_error"));
+        }
+    }
+
+    @PostMapping("/graphs/manual/run")
+    public ResponseEntity<?> runManualGraph(@RequestBody ManualGraphRequest request) {
+        try {
+            if (request.graph() == null || request.graph().nodes() == null || request.graph().nodes().isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "手动任务图不能为空，至少需要 1 个节点", "code", "empty_manual_graph"));
+            }
+            String text = request.text();
+            if (text == null || text.isBlank()) {
+                text = request.graph().raw_text() == null ? "手动可视化建模任务" : request.graph().raw_text();
+            }
+            PipelineResponse response = orchestrator.runManualGraph(text, request.graph(), request.event());
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("error", e.getMessage(), "code", "manual_graph_error"));
         }
     }
 
