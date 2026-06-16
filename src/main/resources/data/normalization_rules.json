@@ -1,0 +1,65 @@
+{
+  "actor_aliases": {
+    "UAV": "UAV",
+    "DRONE": "UAV",
+    "无人机": "UAV",
+    "飞行机器人": "UAV",
+    "UGV": "UGV",
+    "ROVER": "UGV",
+    "无人车": "UGV",
+    "地面车": "UGV",
+    "DOG": "DOG",
+    "ROBOT_DOG": "DOG",
+    "无人狗": "DOG",
+    "四足机器人": "DOG",
+    "SYSTEM": "SYSTEM",
+    "系统": "SYSTEM"
+  },
+  "generic_reference_values": [
+    "异常点周边",
+    "异常位置",
+    "异常点",
+    "异常区域",
+    "故障点",
+    "目标点"
+  ],
+  "parameter_aliases": {
+    "area": ["area", "区域", "位置", "地点", "目标区域", "target_area", "location"],
+    "target": ["target", "目标", "目标点", "目的地", "target_id"],
+    "object": ["object", "对象", "物资", "物品", "item", "payload", "cargo"],
+    "mode": ["mode", "模式", "方式", "inspect_mode"],
+    "source": ["source", "来源", "上游任务", "source_task"],
+    "duration": ["duration", "持续时间", "时长"],
+    "robot": ["robot", "机器人", "故障机器人", "target_robot"]
+  },
+  "event_rules": [
+    {
+      "event_type": "low_battery",
+      "edge_type": "recovery",
+      "condition": "low_battery",
+      "keywords": ["低电量", "电量低", "电量不足", "low_battery", "battery low"]
+    },
+    {
+      "event_type": "blocked",
+      "edge_type": "recovery",
+      "condition": "blocked",
+      "keywords": ["阻塞", "堵塞", "无法通行", "blocked", "obstacle"]
+    },
+    {
+      "event_type": "timeout",
+      "edge_type": "recovery",
+      "condition": "timeout",
+      "keywords": ["超时", "失败", "接口失败", "timeout", "failed", "action_timeout"]
+    },
+    {
+      "event_type": "anomaly_detected",
+      "edge_type": "condition",
+      "condition": "anomaly_detected == true",
+      "keywords": ["异常", "发现", "异常点", "异常热源", "anomaly", "detected"]
+    }
+  ],
+  "scheduler_weights": {
+    "battery": 0.6,
+    "idle": 0.4
+  }
+}

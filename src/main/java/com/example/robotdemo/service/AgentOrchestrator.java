@@ -257,10 +257,49 @@ public class AgentOrchestrator {
     }
 
     private ExecutionEvent defaultEvent(TaskGraph graph, ExecutionPlan plan) {
-        InterfaceBinding ugv = plan.bindings().stream().filter(b -> "UGV-01".equals(b.robot_id())).findFirst()
-                .orElse(plan.bindings().stream().filter(b -> "UGV".equals(b.robot_type())).findFirst().orElse(null));
-        List<String> completed = graph.nodes().stream().filter(n -> "UAV".equals(n.actor_type())).map(TaskNode::id).toList();
-        return new ExecutionEvent("low_battery", ugv == null ? "UGV-01" : ugv.robot_id(), ugv == null ? null : ugv.node_id(), ugv == null ? "/ugv_01/recheck_area" : ugv.ros_interface().name(), completed, "UGV battery below 20% before recheck");
+        InterfaceBinding failed = plan.bindings().stream()
+                .filter(binding -> supportsFailureEvent(binding, "low_battery"))
+                .findFirst()
+                .orElse(plan.bindings().stream().findFirst().orElse(null));
+        List<String> completed = completedBefore(graph, plan, failed == null ? null : failed.node_id());
+        String eventType = failed == null ? "execution_failed" : preferredFailureEvent(failed).orElse("execution_failed");
+        return new ExecutionEvent(
+                eventType,
+                failed == null ? null : failed.robot_id(),
+                failed == null ? null : failed.node_id(),
+                failed == null ? null : failed.ros_interface().name(),
+                completed,
+                "Synthetic demo event generated from current execution plan"
+        );
+    }
+
+    private boolean supportsFailureEvent(InterfaceBinding binding, String eventType) {
+        return dataLoader.contracts().stream()
+                .filter(robot -> Objects.equals(robot.robot_id(), binding.robot_id()))
+                .flatMap(robot -> robot.contracts().stream())
+                .filter(contract -> Objects.equals(contract.capability_name(), binding.task_type()))
+                .anyMatch(contract -> contract.failure_events() != null && contract.failure_events().contains(eventType));
+    }
+
+    private Optional<String> preferredFailureEvent(InterfaceBinding binding) {
+        return dataLoader.contracts().stream()
+                .filter(robot -> Objects.equals(robot.robot_id(), binding.robot_id()))
+                .flatMap(robot -> robot.contracts().stream())
+                .filter(contract -> Objects.equals(contract.capability_name(), binding.task_type()))
+                .map(Contract::failure_events)
+                .filter(events -> events != null && !events.isEmpty())
+                .flatMap(Collection::stream)
+                .findFirst();
+    }
+
+    private List<String> completedBefore(TaskGraph graph, ExecutionPlan plan, String failedNodeId) {
+        if (failedNodeId == null) return List.of();
+        Set<String> prior = new LinkedHashSet<>();
+        for (ScheduleStep step : plan.schedule()) {
+            if (Objects.equals(step.node_id(), failedNodeId)) break;
+            prior.add(step.node_id());
+        }
+        return graph.nodes().stream().map(TaskNode::id).filter(prior::contains).toList();
     }
 
     private String json(Object value) {

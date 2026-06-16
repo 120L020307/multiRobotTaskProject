@@ -91,7 +91,25 @@ public final class Models {
             Map<String, String> input_mapping,
             Map<String, String> output_mapping,
             Map<String, Object> preconditions,
-            List<String> failure_events
+            List<String> failure_events,
+            Map<String, Object> default_params,
+            Map<String, List<String>> param_aliases,
+            Map<String, String> derived_params
+    ) {}
+
+    public record EventRule(
+            String event_type,
+            String edge_type,
+            String condition,
+            List<String> keywords
+    ) {}
+
+    public record NormalizationRules(
+            Map<String, String> actor_aliases,
+            List<String> generic_reference_values,
+            Map<String, List<String>> parameter_aliases,
+            List<EventRule> event_rules,
+            Map<String, Double> scheduler_weights
     ) {}
 
     public record RobotContract(

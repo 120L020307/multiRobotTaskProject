@@ -8,9 +8,11 @@ import java.util.*;
 @Service
 public class ContractMatchingService {
     private final ValidationService validationService;
+    private final NormalizationRuleService rules;
 
-    public ContractMatchingService(ValidationService validationService) {
+    public ContractMatchingService(ValidationService validationService, NormalizationRuleService rules) {
         this.validationService = validationService;
+        this.rules = rules;
     }
 
     public ExecutionPlan buildPlan(TaskGraph graph, List<RobotContract> contracts) {
@@ -46,7 +48,10 @@ public class ContractMatchingService {
         Object batteryValue = robot.state().getOrDefault("battery", 0);
         double battery = NumberSupport.toDouble(batteryValue, 0) / 100.0;
         double idle = Objects.equals(robot.state().get("status"), "idle") ? 1 : 0;
-        return Math.round((0.6 * battery + 0.4 * idle) * 100.0) / 100.0;
+        Map<String, Double> weights = rules.schedulerWeights();
+        double batteryWeight = weights.getOrDefault("battery", 0.6);
+        double idleWeight = weights.getOrDefault("idle", 0.4);
+        return Math.round((batteryWeight * battery + idleWeight * idle) * 100.0) / 100.0;
     }
 
     private List<String> topo(TaskGraph graph) {

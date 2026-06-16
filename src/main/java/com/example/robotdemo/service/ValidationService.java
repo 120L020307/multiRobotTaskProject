@@ -9,9 +9,11 @@ import java.util.stream.Collectors;
 @Service
 public class ValidationService {
     private final CapabilityNormalizer capabilityNormalizer;
+    private final NormalizationRuleService rules;
 
-    public ValidationService(CapabilityNormalizer capabilityNormalizer) {
+    public ValidationService(CapabilityNormalizer capabilityNormalizer, NormalizationRuleService rules) {
         this.capabilityNormalizer = capabilityNormalizer;
+        this.rules = rules;
     }
 
     public ValidationReport validate(TaskGraph graph, List<RobotContract> contracts) {
@@ -47,7 +49,7 @@ public class ValidationService {
     public List<Candidate> findCandidates(TaskNode node, List<RobotContract> robots, boolean enforceState) {
         List<Candidate> out = new ArrayList<>();
         for (RobotContract robot : robots) {
-            if (!Objects.equals(robot.robot_type(), node.actor_type())) continue;
+            if (!Objects.equals(rules.normalizeActorType(robot.robot_type()), rules.normalizeActorType(node.actor_type()))) continue;
             for (Contract contract : robot.contracts()) {
                 if (!Objects.equals(contract.capability_name(), node.task_type())) continue;
                 Map<String, Object> pre = contract.preconditions() == null ? Map.of() : contract.preconditions();
