@@ -22,9 +22,10 @@ public class AgentOrchestrator {
     private final Ros2CodegenService ros2CodegenService;
     private final RecoveryService recoveryService;
     private final CapabilityNormalizer capabilityNormalizer;
+    private final KnowledgeGraphShadowService knowledgeGraphShadowService;
     private final ObjectMapper mapper;
 
-    public AgentOrchestrator(DeepSeekClient llm, DataLoader dataLoader, ValidationService validationService, ContractMatchingService contractMatchingService, Ros2CodegenService ros2CodegenService, RecoveryService recoveryService, CapabilityNormalizer capabilityNormalizer, ObjectMapper mapper) {
+    public AgentOrchestrator(DeepSeekClient llm, DataLoader dataLoader, ValidationService validationService, ContractMatchingService contractMatchingService, Ros2CodegenService ros2CodegenService, RecoveryService recoveryService, CapabilityNormalizer capabilityNormalizer, KnowledgeGraphShadowService knowledgeGraphShadowService, ObjectMapper mapper) {
         this.llm = llm;
         this.dataLoader = dataLoader;
         this.validationService = validationService;
@@ -32,6 +33,7 @@ public class AgentOrchestrator {
         this.ros2CodegenService = ros2CodegenService;
         this.recoveryService = recoveryService;
         this.capabilityNormalizer = capabilityNormalizer;
+        this.knowledgeGraphShadowService = knowledgeGraphShadowService;
         this.mapper = mapper;
     }
 
@@ -55,6 +57,7 @@ public class AgentOrchestrator {
         runTaskGraphAgent(blackboard, traces, runLogger);
         runEvidenceBindingAgent(blackboard, traces, runLogger);
         boolean repairCalled = runValidationAndRepairAgents(blackboard, traces, runLogger);
+        runKnowledgeGraphShadow(blackboard, runLogger);
         runContractMatchingTool(blackboard, runLogger);
         runRos2CodegenTool(blackboard, runLogger);
         runRecoveryAgents(blackboard, traces, runLogger);
@@ -109,6 +112,7 @@ public class AgentOrchestrator {
         blackboard.write("ValidationTool", "ValidationReport", validation, "手动任务图确定性校验结果");
         runLogger.output("ValidationTool", "写入黑板 ValidationReport", validation);
 
+        runKnowledgeGraphShadow(blackboard, runLogger);
         runContractMatchingTool(blackboard, runLogger);
         runRos2CodegenTool(blackboard, runLogger);
         runRecoveryAgents(blackboard, traces, runLogger);
@@ -204,6 +208,28 @@ public class AgentOrchestrator {
                 "unmapped", plan.unmapped(),
                 "schedule", plan.schedule()
         ));
+    }
+
+    private void runKnowledgeGraphShadow(BlackboardWorkspace blackboard, RunLogger runLogger) {
+        runLogger.input(
+                "KnowledgeGraphShadow",
+                "同步运行时任务图并比较规则候选与知识图谱候选",
+                Map.of(
+                        "mode", knowledgeGraphShadowService.mode(),
+                        "run_id", runLogger.runId(),
+                        "node_count", blackboard.taskGraph().nodes().size()
+                )
+        );
+        KnowledgeGraphShadowService.ShadowReport report = knowledgeGraphShadowService.compare(
+                runLogger.runId(),
+                blackboard.taskGraph(),
+                blackboard.contracts()
+        );
+        runLogger.output(
+                "KnowledgeGraphShadow",
+                "知识图谱影子模式比较结果",
+                report
+        );
     }
 
     private void runRos2CodegenTool(BlackboardWorkspace blackboard, RunLogger runLogger) {

@@ -1,0 +1,26 @@
+[
+  {
+    "robot_id": "UAV-01",
+    "sensors": ["rgb_camera", "thermal_camera", "gps"]
+  },
+  {
+    "robot_id": "UAV-02",
+    "sensors": ["rgb_camera", "lidar", "gps"]
+  },
+  {
+    "robot_id": "UGV-01",
+    "sensors": ["rgb_camera", "lidar", "gps"]
+  },
+  {
+    "robot_id": "UGV-02",
+    "sensors": ["rgb_camera", "lidar", "gps"]
+  },
+  {
+    "robot_id": "DOG-01",
+    "sensors": ["rgb_camera", "audio_sensor", "imu"]
+  },
+  {
+    "robot_id": "DOG-02",
+    "sensors": ["rgb_camera", "audio_sensor", "imu"]
+  }
+]

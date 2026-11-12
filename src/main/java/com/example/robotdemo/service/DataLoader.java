@@ -57,6 +57,10 @@ public class DataLoader {
         return read("data/sample_tasks.json", new TypeReference<>() {});
     }
 
+    public List<Map<String, Object>> virtualRobotSensors() {
+        return read("data/virtual_robot_sensors.json", new TypeReference<>() {});
+    }
+
     private <T> T read(String path, TypeReference<T> type) {
         try (InputStream input = new ClassPathResource(path).getInputStream()) {
             return mapper.readValue(input, type);

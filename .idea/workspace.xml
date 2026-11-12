@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="49821214-1830-418c-874a-0e971bc3dd80" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/java/com/example/robotdemo/controller/KgController.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/java/com/example/robotdemo/service/KnowledgeGraphQueryService.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/java/com/example/robotdemo/service/KnowledgeGraphSyncService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.mvn/maven.config" beforeDir="false" afterPath="$PROJECT_DIR$/.mvn/maven.config" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/robotdemo/service/AgentOrchestrator.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/robotdemo/service/AgentOrchestrator.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/robotdemo/service/DataLoader.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/robotdemo/service/DataLoader.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/robotdemo/service/RunLogger.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/robotdemo/service/RunLogger.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/resources/application.yml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application.yml" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="MarkdownSettingsMigration">
+    <option name="stateVersion" value="1" />
+  </component>
+  <component name="MavenImportPreferences">
+    <option name="generalSettings">
+      <MavenGeneralSettings>
+        <option name="alwaysUpdateSnapshots" value="true" />
+      </MavenGeneralSettings>
+    </option>
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 2
+}</component>
+  <component name="ProjectId" id="3LdgwY4V3y6EyJeWjw1em19Y8DA" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Maven.robot-taskgraph-demo [clean].executor": "Run",
+    "Maven.robot-taskgraph-demo [compile].executor": "Run",
+    "RequestMappingsPanelOrder0": "0",
+    "RequestMappingsPanelOrder1": "1",
+    "RequestMappingsPanelWidth0": "75",
+    "RequestMappingsPanelWidth1": "75",
+    "RunOnceActivity.OpenProjectViewOnStart": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "Spring Boot.RobotDemoApplication.executor": "Run",
+    "git-widget-placeholder": "master",
+    "kotlin-language-version-configured": "true",
+    "last_opened_file_path": "D:/IdeaProject/MRT-front",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "vue.rearranger.settings.migration": "true"
+  }
+}]]></component>
+  <component name="RunManager">
+    <configuration name="RobotDemoApplication" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot" nameIsGenerated="true">
+      <option name="ALTERNATIVE_JRE_PATH" value="17" />
+      <option name="ALTERNATIVE_JRE_PATH_ENABLED" value="true" />
+      <envs>
+        <env name="DEEPSEEK_API_KEY" value="sk-2d454c8229694007803466504b0ca8d8" />
+        <env name="NEO4J_URI" value="neo4j://127.0.0.1:7687" />
+        <env name="NEO4J_USERNAME" value="neo4j" />
+        <env name="NEO4J_PASSWORD" value="12341234" />
+      </envs>
+      <module name="robot-taskgraph-demo" />
+      <option name="SPRING_BOOT_MAIN_CLASS" value="com.example.robotdemo.RobotDemoApplication" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="49821214-1830-418c-874a-0e971bc3dd80" name="Changes" comment="" />
+      <created>1793789598758</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1793789598758</updated>
+      <workItem from="1793789599635" duration="826000" />
+      <workItem from="1793858295450" duration="1031000" />
+      <workItem from="1794490348777" duration="4354000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+</project>

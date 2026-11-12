@@ -44,6 +44,10 @@ public class RunLogger {
         return List.copyOf(entries);
     }
 
+    public String runId() {
+        return runId;
+    }
+
     private void emit(String stage, String direction, String title, Object payload) {
         RunLogEntry entry = new RunLogEntry(
                 runId,
